@@ -157,7 +157,7 @@ local function buildHouse(basePosition: Vector3): Model
 	newPart(
 		"WestWallLintel",
 		Vector3.new(WALL_THICKNESS, lintelHeight, DOOR_WIDTH),
-		Vector3.new(westX, floorY + DOOR_HEIGHT + lintelHeight / 2, basePosition.Z),
+		Vector3.new(westX, floorY + 0.5 + DOOR_HEIGHT + lintelHeight / 2, basePosition.Z),
 		WALL_COLOR,
 		house
 	)
