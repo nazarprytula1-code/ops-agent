@@ -27,6 +27,14 @@ local Workspace = game:GetService("Workspace")
 -- there, and the whole city (road + every block) is built flush on top
 -- of that instead of a hardcoded 0. Falls back to Y=0 if the raycast
 -- finds nothing.
+--
+-- v4: after v3, the found ground surface was often literally the extended
+-- Baseplate itself (see v2 -- it now reaches under the city's near edge),
+-- so RoadBase's top landed exactly coplanar with the Baseplate's top --
+-- two overlapping surfaces at the same Y flicker/z-fight (the "road is
+-- blinking" report from Slack). GROUND_CLEARANCE lifts the whole city a
+-- small, imperceptible amount above the raycast hit so RoadBase is always
+-- strictly above whatever it landed on.
 
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
@@ -41,6 +49,9 @@ local CITY_SIZE = GRID_SIZE * BLOCK_SIZE + (GRID_SIZE + 1) * ROAD_WIDTH
 
 local FALLBACK_GROUND_Y = 0 -- baseplate top per default.project.json, used only if the raycast finds nothing
 local RAYCAST_HEIGHT = 500 -- start well above anything reasonable and cast straight down
+local GROUND_CLEARANCE = 0.2 -- lift the city this far above the raycast hit so RoadBase never sits exactly
+-- coplanar with Workspace.Baseplate (which now extends under part of the city, see v2 note above);
+-- two same-Y surfaces flicker/z-fight, this guarantees the road always wins the depth test.
 
 -- Finds the actual top-of-ground Y at (x, z) instead of assuming the
 -- baseplate is exactly at Y=0, so the whole city always sits on top of
@@ -328,7 +339,7 @@ City.Parent = Workspace
 -- One raycast at the city's center grounds the whole city (road + every
 -- block); the old City folder is already gone (destroyed above), so this
 -- hits whatever real baseplate/terrain is actually there.
-local cityGroundY = findGroundY(CITY_ORIGIN.X, CITY_ORIGIN.Z)
+local cityGroundY = findGroundY(CITY_ORIGIN.X, CITY_ORIGIN.Z) + GROUND_CLEARANCE
 
 local road = newPart(
 	"RoadBase",
