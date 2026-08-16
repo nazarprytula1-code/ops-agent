@@ -15,6 +15,13 @@ local TweenService = game:GetService("TweenService")
 -- "wall with no door" from Slack). The door is now on the -X wall (WestWall),
 -- facing Spawn, and it is a real openable door (ProximityPrompt, hold E)
 -- instead of just an open gap.
+--
+-- v5: Slack feedback said the door still looked small next to the wall
+-- ("4/7 of the wall height" in Play, screenshot showed ~4 plank rows of
+-- door vs ~7 total). Bumped DOOR_HEIGHT 11 -> 12.5 (wall is 14, so the
+-- door is now ~89% of wall height) and DOOR_WIDTH 5 -> 6. Doorway side
+-- segments, lintel, and the door leaf are all computed from these
+-- constants, so everything stays consistent automatically.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 14
@@ -25,8 +32,8 @@ local WALL_COLOR = Color3.fromRGB(194, 178, 128)
 local ROOF_COLOR = Color3.fromRGB(120, 60, 40)
 local ROOF_TRIM_COLOR = Color3.fromRGB(90, 44, 30)
 local DOOR_COLOR = Color3.fromRGB(63, 38, 22)
-local DOOR_WIDTH = 5
-local DOOR_HEIGHT = 11
+local DOOR_WIDTH = 6
+local DOOR_HEIGHT = 12.5
 local ROOF_OVERHANG = 1.5 -- extra width/depth the roof extends past the walls
 local ROOF_THICKNESS = 1
 local ROOF_TRIM_HEIGHT = 0.6
