@@ -16,6 +16,7 @@ In a Slack sandbox, the same tree is at `/workspace/game/` (seeded at deploy). R
 | `game/src/server/` | `ServerScriptService.Server` (`*.server.luau` → Script) |
 | `game/src/client/` | `StarterPlayer.StarterPlayerScripts.Client` (`*.client.luau` → LocalScript) |
 | `game/default.project.json` | Rojo tree |
+| `game/open-cloud.json` | Universe ID `10720619997`, Place ID `81136506656442` |
 
 Require shared code as `require(ReplicatedStorage.Shared.<Module>)`.
 
@@ -26,6 +27,10 @@ Require shared code as `require(ReplicatedStorage.Shared.<Module>)`.
 3. Use Luau types on public functions and instance waits (`WaitForChild` + `::`).
 4. Do not store secrets, Open Cloud keys, or DataStore keys in source.
 5. Do not rewrite `default.project.json` unless the user asked to move services.
+
+## Publish
+
+This agent does not upload a place. After the Luau change is in git `main`, GitHub Actions builds with Rojo and calls Open Cloud (`ROBLOX_API_KEY` on the repo). Tell the human to merge/push `game/` and, if Team Create is open, close Studio on that place first (Open Cloud can return 409).
 
 ## What this agent cannot do
 

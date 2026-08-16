@@ -1,0 +1,66 @@
+name: Publish Roblox place
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "game/**"
+      - ".github/workflows/publish-place.yml"
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: Saved = cloud draft. Published = live place.
+        type: choice
+        options:
+          - Saved
+          - Published
+        default: Saved
+
+env:
+  UNIVERSE_ID: "10720619997"
+  PLACE_ID: "81136506656442"
+  ROJO_VERSION: "7.7.0"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rojo
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o /tmp/rojo.zip \
+            "https://github.com/rojo-rbx/rojo/releases/download/v${ROJO_VERSION}/rojo-${ROJO_VERSION}-linux-x86_64.zip"
+          unzip -qo /tmp/rojo.zip -d /tmp/rojo-extract
+          install -m 0755 /tmp/rojo-extract/rojo "$HOME/.local/bin/rojo"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build place
+        run: |
+          set -euo pipefail
+          rojo --version
+          rojo build game/default.project.json -o place.rbxl
+          ls -lh place.rbxl
+
+      - name: Publish to Open Cloud
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          VERSION_TYPE: ${{ github.event.inputs.version_type || 'Published' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ROBLOX_API_KEY}" ]; then
+            echo "Missing secret ROBLOX_API_KEY. Add it in repo Settings → Secrets → Actions."
+            echo "Creator Hub: API key with universe-places:write on this universe."
+            exit 1
+          fi
+          url="https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=${VERSION_TYPE}"
+          echo "POST ${url}"
+          curl -sS --fail-with-body -X POST "$url" \
+            -H "x-api-key: ${ROBLOX_API_KEY}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @place.rbxl
+          echo
