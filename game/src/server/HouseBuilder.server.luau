@@ -16,27 +16,27 @@ local TweenService = game:GetService("TweenService")
 -- facing Spawn, and it is a real openable door (ProximityPrompt, hold E)
 -- instead of just an open gap.
 --
--- v5: Slack feedback said the door still looked small next to the wall
--- ("4/7 of the wall height" in Play, screenshot showed ~4 plank rows of
--- door vs ~7 total). Bumped DOOR_HEIGHT 11 -> 12.5 (wall is 14, so the
--- door is now ~89% of wall height) and DOOR_WIDTH 5 -> 6. Doorway side
--- segments, lintel, and the door leaf are all computed from these
--- constants, so everything stays consistent automatically.
+-- v5: doubled the whole house (walls, door, roof, wall thickness) 2x per
+-- Slack request. All footprint/height/door constants below scale together,
+-- so the door keeps its original ~2.2:1 height:width ratio instead of
+-- becoming square. basePosition.Y is unchanged (0), and the floor is still
+-- sized/positioned so its bottom sits exactly on the baseplate top (Y=0,
+-- see default.project.json) -- nothing is built underground.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
-local WALL_HEIGHT = 14
-local WIDTH = 12
-local DEPTH = 12
-local WALL_THICKNESS = 1
+local WALL_HEIGHT = 28
+local WIDTH = 24
+local DEPTH = 24
+local WALL_THICKNESS = 2
 local WALL_COLOR = Color3.fromRGB(194, 178, 128)
 local ROOF_COLOR = Color3.fromRGB(120, 60, 40)
 local ROOF_TRIM_COLOR = Color3.fromRGB(90, 44, 30)
 local DOOR_COLOR = Color3.fromRGB(63, 38, 22)
-local DOOR_WIDTH = 6
-local DOOR_HEIGHT = 12.5
-local ROOF_OVERHANG = 1.5 -- extra width/depth the roof extends past the walls
-local ROOF_THICKNESS = 1
-local ROOF_TRIM_HEIGHT = 0.6
+local DOOR_WIDTH = 10
+local DOOR_HEIGHT = 22
+local ROOF_OVERHANG = 3 -- extra width/depth the roof extends past the walls
+local ROOF_THICKNESS = 2
+local ROOF_TRIM_HEIGHT = 1.2
 local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
 
