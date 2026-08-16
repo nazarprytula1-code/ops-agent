@@ -1,19 +1,20 @@
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Chat = game:GetService("Chat")
-local TextChatService = game:GetService("TextChatService")
 
 local NPC_NAME = "Guide"
 local GREETING = "Привіт! Я NPC і пишу в чат :)"
 local TOUCH_MESSAGE = "Гарного дня!"
 local TOUCH_COOLDOWN = 5 -- seconds, avoids chat spam when multiple players touch at once
 
+-- TextChannel:DisplaySystemMessage can only be called from the client, so the
+-- server broadcasts the message and each client posts it into its own chat window.
+local npcChatEvent = Instance.new("RemoteEvent")
+npcChatEvent.Name = "NpcChatMessage"
+npcChatEvent.Parent = ReplicatedStorage
+
 local function sendToChat(message: string)
-	local ok, generalChannel = pcall(function()
-		return TextChatService.TextChannels:WaitForChild("RBXGeneral", 5)
-	end)
-	if ok and generalChannel then
-		(generalChannel :: TextChannel):DisplaySystemMessage(("[%s]: %s"):format(NPC_NAME, message))
-	end
+	npcChatEvent:FireAllClients(("[%s]: %s"):format(NPC_NAME, message))
 end
 
 local function say(part: BasePart, message: string)
