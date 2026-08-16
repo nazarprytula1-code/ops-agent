@@ -1,7 +1,7 @@
 local GameConfig = {
 	WalkSpeed = 20,
 	SprintSpeed = 24,
-	BuildId = "ci-test-2",
+	BuildId = "slack-pr-1",
 }
 
 return GameConfig
