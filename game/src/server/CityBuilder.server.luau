@@ -15,11 +15,18 @@ local Workspace = game:GetService("Workspace")
 -- of empty space between Spawn and the city. Fixed two ways: moved the
 -- city closer (Z=260, still clear of the starter house at (24,0,0)) and
 -- extended Baseplate toward +Z in default.project.json so it now reaches
--- Z=474, comfortably past the city's near edge. There is no gap left to
--- walk across; the city also brings its own ground (RoadBase + per-block
--- grass Plates) which now simply overlaps the (extended) Baseplate under
--- the city footprint -- both are flush with world Y=0, so that overlap
--- is not visible as a seam or step.
+-- Z=474, comfortably past the city's near edge.
+--
+-- v3: the whole city was built assuming the ground is exactly Y=0 (the
+-- Baseplate top per default.project.json). If the live place's actual
+-- baseplate/terrain has drifted from that (e.g. edited in Studio outside
+-- of Rojo), a hardcoded Y=0 buries most of the city -- that's the "city
+-- underground, only ~1 block of tree tops and ~3.5 blocks of wall show"
+-- report from Slack. Same fix as TreeBuilder.server.luau: a downward
+-- Workspace:Raycast at the city center finds the real ground surface
+-- there, and the whole city (road + every block) is built flush on top
+-- of that instead of a hardcoded 0. Falls back to Y=0 if the raycast
+-- finds nothing.
 
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
@@ -31,6 +38,29 @@ local TREE_OFFSET = 6 -- how far the tree sits from its house, along the row
 local CITY_ORIGIN = Vector3.new(0, 0, 260) -- close enough to walk to from Spawn (0,0,0); still clear of the starter house (24,0,0)
 
 local CITY_SIZE = GRID_SIZE * BLOCK_SIZE + (GRID_SIZE + 1) * ROAD_WIDTH
+
+local FALLBACK_GROUND_Y = 0 -- baseplate top per default.project.json, used only if the raycast finds nothing
+local RAYCAST_HEIGHT = 500 -- start well above anything reasonable and cast straight down
+
+-- Finds the actual top-of-ground Y at (x, z) instead of assuming the
+-- baseplate is exactly at Y=0, so the whole city always sits on top of
+-- whatever is really there (baseplate, terrain, etc). Mirrors
+-- TreeBuilder.server.luau's findGroundY.
+local function findGroundY(x: number, z: number): number
+	local origin = Vector3.new(x, RAYCAST_HEIGHT, z)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local city = Workspace:FindFirstChild("City")
+	if city then
+		params.FilterDescendantsInstances = { city }
+	end
+
+	local result = Workspace:Raycast(origin, Vector3.new(0, -(RAYCAST_HEIGHT * 2), 0), params)
+	if result then
+		return result.Position.Y
+	end
+	return FALLBACK_GROUND_Y
+end
 
 -- Ground
 local PLATE_THICKNESS = 0.4
@@ -237,11 +267,13 @@ end
 
 -- Builds one quarter: a grass plate plus 12 houses+trees, 3 per side, each
 -- house's door (and its tree) facing outward, away from the block center.
-local function buildBlock(blockCenter: Vector3, container: Instance)
+-- baseGroundY is the real ground surface Y found by findGroundY, not a
+-- hardcoded assumption.
+local function buildBlock(blockCenter: Vector3, container: Instance, baseGroundY: number)
 	local block = Instance.new("Model")
 	block.Name = "Block"
 
-	local plateY = 0 -- road top sits at world Y=0, same convention as Workspace.Baseplate
+	local plateY = baseGroundY -- road/plate sits flush on the real ground, not a hardcoded Y=0
 	local plate = newPart(
 		"Plate",
 		Vector3.new(BLOCK_SIZE, PLATE_THICKNESS, BLOCK_SIZE),
@@ -293,10 +325,15 @@ local City = Instance.new("Folder")
 City.Name = "City"
 City.Parent = Workspace
 
+-- One raycast at the city's center grounds the whole city (road + every
+-- block); the old City folder is already gone (destroyed above), so this
+-- hits whatever real baseplate/terrain is actually there.
+local cityGroundY = findGroundY(CITY_ORIGIN.X, CITY_ORIGIN.Z)
+
 local road = newPart(
 	"RoadBase",
 	Vector3.new(CITY_SIZE, 1, CITY_SIZE),
-	Vector3.new(CITY_ORIGIN.X, -0.5, CITY_ORIGIN.Z),
+	Vector3.new(CITY_ORIGIN.X, cityGroundY - 0.5, CITY_ORIGIN.Z),
 	ROAD_COLOR,
 	City
 )
@@ -307,6 +344,6 @@ for i = 0, GRID_SIZE - 1 do
 		local offsetX = ROAD_WIDTH + BLOCK_SIZE / 2 + i * (BLOCK_SIZE + ROAD_WIDTH) - CITY_SIZE / 2
 		local offsetZ = ROAD_WIDTH + BLOCK_SIZE / 2 + k * (BLOCK_SIZE + ROAD_WIDTH) - CITY_SIZE / 2
 		local blockCenter = Vector3.new(CITY_ORIGIN.X + offsetX, CITY_ORIGIN.Y, CITY_ORIGIN.Z + offsetZ)
-		buildBlock(blockCenter, City)
+		buildBlock(blockCenter, City, cityGroundY)
 	end
 end
