@@ -27,10 +27,11 @@ Require shared code as `require(ReplicatedStorage.Shared.<Module>)`.
 3. Use Luau types on public functions and instance waits (`WaitForChild` + `::`).
 4. Do not store secrets, Open Cloud keys, or DataStore keys in source.
 5. Do not rewrite `default.project.json` unless the user asked to move services.
+6. When the human wants the change in git/Roblox from Slack: write `game/` in the sandbox, then `open_game_pr` with those paths. They click Slack **Allow** (that is the approval). Then `merge_game_pr` only if they asked to ship it (Allow again).
 
 ## Publish
 
-This agent does not upload a place. After the Luau change is in git `main`, GitHub Actions builds with Rojo and calls Open Cloud (`ROBLOX_API_KEY` on the repo). Tell the human to merge/push `game/` and, if Team Create is open, close Studio on that place first (Open Cloud can return 409).
+Sandbox writes are not live. `open_game_pr` (HITL) opens a PR; `merge_game_pr` (HITL) squash-merges to `main`; GitHub Actions then publishes via Open Cloud. Close Studio on the place first (409). Never paste `ROBLOX_API_KEY` or `GAME_GITHUB_TOKEN`.
 
 ## What this agent cannot do
 

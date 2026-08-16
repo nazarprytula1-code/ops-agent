@@ -12,3 +12,4 @@ description: Use when asked to review a pull request, summarize a diff, or sugge
    - **Suggestions** — concrete, ordered next steps (paths when possible)
 4. Keep the tone collaborative; do not rewrite the whole PR unless asked.
 5. If context is incomplete (no checkout locally, huge generated files), say what you could not see.
+6. If the diff is under `game/` or is Luau/Rojo, also load the `roblox_luau` skill.

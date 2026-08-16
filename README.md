@@ -115,6 +115,17 @@ Place: Universe `10720619997`, Place `81136506656442` (`game/open-cloud.json`).
 
 Close Team Create / that place in Studio before the run, or Open Cloud may return **409**. Never commit the API key.
 
+## Slack → PR → Roblox
+
+Tools `open_game_pr` and `merge_game_pr` (Slack Approve buttons) commit only `game/` into GitHub, then squash-merge to `main` so Actions publish.
+
+1. GitHub → Settings → Developer settings → Fine-grained token (or classic PAT): **Contents** and **Pull requests** on `nazarprytula1-code/ops-agent`.
+2. Vercel project env: `GAME_GITHUB_TOKEN` = that token. Also `.env` for local TUI.
+3. `npm run deploy` (tools live on the Eve deployment).
+4. Slack: describe the change → Approve PR → if you want it live, Approve merge (Studio closed).
+
+`GAME_GITHUB_TOKEN` is not `ROBLOX_API_KEY`.
+
 ## Local agent TUI
 
 ```bash

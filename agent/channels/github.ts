@@ -8,6 +8,6 @@ import { githubChannel } from "eve/channels/github";
 export default githubChannel({
   botName: process.env.GITHUB_BOT_NAME ?? "ops-agent",
   credentials: connectGitHubCredentials(
-    process.env.GITHUB_CONNECTOR ?? "github/my-agent",
+    process.env.GITHUB_CONNECTOR ?? "github/ops-agent",
   ),
 });
