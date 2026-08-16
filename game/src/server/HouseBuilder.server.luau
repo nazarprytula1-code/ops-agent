@@ -8,7 +8,7 @@ local Workspace = game:GetService("Workspace")
 -- only -- no rotation math, so there is no risk of a misoriented part.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
-local WALL_HEIGHT = 8
+local WALL_HEIGHT = 14
 local WIDTH = 12
 local DEPTH = 12
 local WALL_THICKNESS = 1
@@ -16,7 +16,7 @@ local WALL_COLOR = Color3.fromRGB(194, 178, 128)
 local ROOF_COLOR = Color3.fromRGB(120, 60, 40)
 local ROOF_TRIM_COLOR = Color3.fromRGB(90, 44, 30)
 local DOOR_WIDTH = 3.5
-local DOOR_HEIGHT = 5.5
+local DOOR_HEIGHT = 7.5
 local ROOF_OVERHANG = 1.5 -- extra width/depth the roof extends past the walls
 local ROOF_THICKNESS = 1
 local ROOF_TRIM_HEIGHT = 0.6
