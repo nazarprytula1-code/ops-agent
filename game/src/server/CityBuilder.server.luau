@@ -10,11 +10,16 @@ local Workspace = game:GetService("Workspace")
 -- here are simplified -- a painted doorway instead of a real openable
 -- ProximityPrompt door -- because there are 192 of them (16 blocks x 12);
 -- keeping them non-interactive keeps this script small and cheap to build.
--- The city is centered far from Spawn/the starter house (see CITY_ORIGIN)
--- so nothing overlaps.
---
--- The city brings its own ground (RoadBase + per-block grass Plates), so it
--- does not depend on the world Baseplate being big enough underneath it.
+-- v2: the city used to sit at CITY_ORIGIN Z=500, past the edge of the
+-- 512-stud Baseplate (which only reached Z=256) -- an unwalkable gap/pit
+-- of empty space between Spawn and the city. Fixed two ways: moved the
+-- city closer (Z=260, still clear of the starter house at (24,0,0)) and
+-- extended Baseplate toward +Z in default.project.json so it now reaches
+-- Z=474, comfortably past the city's near edge. There is no gap left to
+-- walk across; the city also brings its own ground (RoadBase + per-block
+-- grass Plates) which now simply overlaps the (extended) Baseplate under
+-- the city footprint -- both are flush with world Y=0, so that overlap
+-- is not visible as a seam or step.
 
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
@@ -23,7 +28,7 @@ local ROAD_WIDTH = 20 -- road width between quarters and around the outer edge
 local ROW_INSET = 8 -- distance from a block's edge to its house row centerline
 local PITCH = 14 -- spacing between the 3 house centers along one row
 local TREE_OFFSET = 6 -- how far the tree sits from its house, along the row
-local CITY_ORIGIN = Vector3.new(0, 0, 500) -- far from Spawn (0,0,0) and the starter house (24,0,0)
+local CITY_ORIGIN = Vector3.new(0, 0, 260) -- close enough to walk to from Spawn (0,0,0); still clear of the starter house (24,0,0)
 
 local CITY_SIZE = GRID_SIZE * BLOCK_SIZE + (GRID_SIZE + 1) * ROAD_WIDTH
 
