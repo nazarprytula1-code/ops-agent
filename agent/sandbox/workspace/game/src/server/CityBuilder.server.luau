@@ -1,4 +1,5 @@
 local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 
 -- Procedurally builds a small city: a 4x4 grid of 16 blocks, each block
 -- ("quarter") holding 12 simplified houses (3 per side, facing outward)
@@ -6,10 +7,7 @@ local Workspace = game:GetService("Workspace")
 -- the outer edge of the whole grid.
 --
 -- This is intentionally separate from HouseBuilder.server.luau (the single
--- interactive starter house near Spawn) and does not touch it. City houses
--- here are simplified -- a painted doorway instead of a real openable
--- ProximityPrompt door -- because there are 192 of them (16 blocks x 12);
--- keeping them non-interactive keeps this script small and cheap to build.
+-- interactive starter house near Spawn) and does not touch it.
 -- v2: the city used to sit at CITY_ORIGIN Z=500, past the edge of the
 -- 512-stud Baseplate (which only reached Z=256) -- an unwalkable gap/pit
 -- of empty space between Spawn and the city. Fixed two ways: moved the
@@ -35,6 +33,17 @@ local Workspace = game:GetService("Workspace")
 -- blinking" report from Slack). GROUND_CLEARANCE lifts the whole city a
 -- small, imperceptible amount above the raycast hit so RoadBase is always
 -- strictly above whatever it landed on.
+--
+-- v5: per Slack request, all 192 city house doors are now real, openable
+-- doors (ProximityPrompt, hold E) instead of painted panels -- the original
+-- "non-interactive for performance" tradeoff from v1 is gone. Reuses the
+-- same hinge-swing approach as HouseBuilder.server.luau's starter door, but
+-- generalized to work for a door on any of the 4 wall orientations (see
+-- setupSwingingDoor below), since city houses need doors facing all 4
+-- directions depending on which edge of the block they sit on. To keep 192
+-- simultaneous ProximityPrompts cheap, MaxActivationDistance is small (8
+-- studs, same as the starter house) so Roblox only activates prompts for
+-- doors actually near the local player; it does not scale with door count.
 
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
@@ -88,6 +97,9 @@ local ROOF_TRIM_COLOR = Color3.fromRGB(90, 44, 30)
 local DOOR_COLOR = Color3.fromRGB(63, 38, 22)
 local DOOR_WIDTH = 3.4
 local DOOR_HEIGHT = 6.5
+local DOOR_OPEN_ANGLE = math.rad(90)
+local DOOR_TWEEN_SECONDS = 0.4
+local DOOR_MAX_ACTIVATION_DISTANCE = 8 -- keeps 192 simultaneous prompts cheap; only doors near the player activate
 local ROOF_OVERHANG = 1
 local ROOF_THICKNESS = 0.8
 local ROOF_TRIM_HEIGHT = 0.5
@@ -109,6 +121,70 @@ local function newPart(name: string, size: Vector3, position: Vector3, color: Co
 	part.Material = Enum.Material.WoodPlanks
 	part.Parent = parent
 	return part
+end
+
+-- Wires a ProximityPrompt (default key: E) onto a city house `door` that
+-- swings it open around a vertical hinge line, then swings it shut. Mirrors
+-- HouseBuilder.server.luau's setupSwingingDoor, generalized for a door on
+-- any of the 4 wall orientations: `doorAxis` ("X" or "Z") is the wall's
+-- normal axis (same meaning as buildCityHouse's doorAxis/doorSign), `sign`
+-- is which side of that axis the wall is on, `hingeWidthCoord` is the fixed
+-- coordinate along the door's width axis where the hinge sits (the "Near"
+-- edge, matching DoorWallNear), and `wallCoord` is the wall's fixed
+-- coordinate along its normal axis.
+local function setupSwingingDoor(door: Part, doorAxis: string, sign: number, hingeWidthCoord: number, wallCoord: number)
+	local closedCFrame = door.CFrame
+	-- Shifting the door's center this far off the wall plane, toward the
+	-- room's interior (-sign direction), then rotating 90 degrees swaps the
+	-- door's width/thickness axes, which keeps the edge at hingeWidthCoord
+	-- fixed on the wall plane -- i.e. it hinges open instead of teleporting.
+	local offsetNormal = wallCoord - sign * DOOR_WIDTH / 2
+	local openCFrame
+	if doorAxis == "Z" then
+		openCFrame = CFrame.new(hingeWidthCoord, door.Position.Y, offsetNormal) * CFrame.Angles(0, DOOR_OPEN_ANGLE, 0)
+	else
+		openCFrame = CFrame.new(offsetNormal, door.Position.Y, hingeWidthCoord) * CFrame.Angles(0, DOOR_OPEN_ANGLE, 0)
+	end
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "OpenPrompt"
+	prompt.ActionText = "Open"
+	prompt.ObjectText = "Door"
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = DOOR_MAX_ACTIVATION_DISTANCE
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = door
+
+	local isOpen = false
+	local tweening = false
+
+	prompt.Triggered:Connect(function()
+		if tweening then
+			return
+		end
+		tweening = true
+
+		if not isOpen then
+			door.CanCollide = false
+			prompt.ActionText = "Close"
+			local tween =
+				TweenService:Create(door, TweenInfo.new(DOOR_TWEEN_SECONDS, Enum.EasingStyle.Quad), { CFrame = openCFrame })
+			tween:Play()
+			tween.Completed:Wait()
+			isOpen = true
+		else
+			prompt.ActionText = "Open"
+			local tween =
+				TweenService:Create(door, TweenInfo.new(DOOR_TWEEN_SECONDS, Enum.EasingStyle.Quad), { CFrame = closedCFrame })
+			tween:Play()
+			tween.Completed:Wait()
+			door.CanCollide = true
+			isOpen = false
+		end
+
+		tweening = false
+	end)
 end
 
 -- A simple two-part tree: a vertical trunk and a ball of leaves on top.
@@ -142,10 +218,10 @@ local function buildTree(position: Vector3): Model
 	return tree
 end
 
--- Builds one simplified house. `doorAxis` ("X" or "Z") and `doorSign` (-1 or 1)
+-- Builds one house. `doorAxis` ("X" or "Z") and `doorSign` (-1 or 1)
 -- pick which of the 4 walls gets the doorway, e.g. doorAxis="Z", doorSign=-1
--- puts the doorway on the wall facing -Z. The doorway here is a painted
--- panel, not an interactive door (see file header for why).
+-- puts the doorway on the wall facing -Z. The door is a real openable
+-- ProximityPrompt door (see setupSwingingDoor / v5 file header note).
 local function buildCityHouse(center: Vector3, doorAxis: string, doorSign: number): Model
 	local house = Instance.new("Model")
 	house.Name = "House"
@@ -194,13 +270,16 @@ local function buildCityHouse(center: Vector3, doorAxis: string, doorSign: numbe
 				WALL_COLOR,
 				house
 			)
-			newPart(
+			local door = newPart(
 				"Door",
 				Vector3.new(DOOR_WIDTH, DOOR_HEIGHT, WALL_THICKNESS),
 				Vector3.new(center.X, floorY + 0.5 + DOOR_HEIGHT / 2, wallZ),
 				DOOR_COLOR,
 				house
 			)
+			door.Material = Enum.Material.Wood
+			door.CanCollide = true
+			setupSwingingDoor(door, "Z", sign, center.X - DOOR_WIDTH / 2, wallZ)
 		else
 			newPart(
 				sign < 0 and "NorthWall" or "SouthWall",
@@ -238,13 +317,16 @@ local function buildCityHouse(center: Vector3, doorAxis: string, doorSign: numbe
 				WALL_COLOR,
 				house
 			)
-			newPart(
+			local door = newPart(
 				"Door",
 				Vector3.new(WALL_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH),
 				Vector3.new(wallX, floorY + 0.5 + DOOR_HEIGHT / 2, center.Z),
 				DOOR_COLOR,
 				house
 			)
+			door.Material = Enum.Material.Wood
+			door.CanCollide = true
+			setupSwingingDoor(door, "X", sign, center.Z - DOOR_WIDTH / 2, wallX)
 		else
 			newPart(
 				sign < 0 and "WestWall" or "EastWall",
