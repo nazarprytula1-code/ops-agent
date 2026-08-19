@@ -26,10 +26,17 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- Drivability: all parts are unanchored and rigidly welded together into a
 -- single assembly, with a VehicleSeat on the open hood (the cabin only
 -- covers the rear half of the body, see CABIN_Z_OFFSET below) so it's
--- reachable and not enclosed by the cabin shell. Sitting in the seat and
--- using the default WASD/throttle-steer controls drives the whole welded
--- assembly via the seat's built-in vehicle physics -- no extra scripts
--- needed for basic driving.
+-- reachable and not enclosed by the cabin shell.
+--
+-- The actual driving physics (turning ThrottleFloat/SteerFloat into
+-- movement) lives in CarDrive.server.luau, not here: VehicleSeat's built-in
+-- no-script driving only works through motorized HingeConstraint wheel
+-- joints (see AreHingesDetected in the Roblox docs), and getting a hinge's
+-- rotation axis right from Attachment orientation isn't verifiable without
+-- Studio. CarDrive.server.luau instead reads the seat's Throttle/Steer each
+-- frame and sets AssemblyLinearVelocity/AssemblyAngularVelocity on the
+-- welded body directly, which is deterministic and doesn't depend on wheel
+-- joint geometry.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local HOUSE_HALF_WIDTH = 12 -- WIDTH / 2 from HouseBuilder
