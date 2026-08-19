@@ -16,7 +16,7 @@ In a Slack sandbox, the same tree is at `/workspace/game/` (seeded at deploy). R
 | `game/src/server/` | `ServerScriptService.Server` (`*.server.luau` → Script) |
 | `game/src/client/` | `StarterPlayer.StarterPlayerScripts.Client` (`*.client.luau` → LocalScript) |
 | `game/default.project.json` | Rojo tree |
-| `game/open-cloud.json` | Universe ID `10720619997`, Place ID `81136506656442` |
+| `game/open-cloud.json` | Primary `10720619997` / `81136506656442`; reserve `10735659349` / `113088894576682` |
 
 Require shared code as `require(ReplicatedStorage.Shared.<Module>)`.
 

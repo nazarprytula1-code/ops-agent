@@ -107,11 +107,11 @@ Example Slack prompt after Connect works:
 
 ## Publish to Roblox (Open Cloud)
 
-Place: Universe `10720619997`, Place `81136506656442` (`game/open-cloud.json`).
+Primary place: Universe `10720619997`, Place `81136506656442`. Reserve: Universe `10735659349`, Place `113088894576682` (`game/open-cloud.json`).
 
-1. Creator Hub → credentials → API key with **`universe-places:write`** on that universe.
-2. GitHub repo → Settings → Secrets and variables → Actions → `ROBLOX_API_KEY`.
-3. Push `game/` to `main`, or Actions → **Publish Roblox place** → Run workflow (`Saved` = cloud draft, `Published` = live).
+1. Creator Hub → credentials → API key with **`universe-places:write`** on each universe.
+2. GitHub repo → Settings → Secrets and variables → Actions → `ROBLOX_API_KEY` (primary), `ROBLOX_API_KEY1` (reserve).
+3. Push `game/` to `main` (publishes **primary**), or Actions → **Publish Roblox place** → Run workflow. Pick **target** (`primary` / `secondary`) and **version_type** (`Saved` = cloud draft, `Published` = live).
 
 Close Team Create / that place in Studio before the run, or Open Cloud may return **409**. Never commit the API key.
 

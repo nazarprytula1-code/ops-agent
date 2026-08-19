@@ -8,6 +8,13 @@ on:
       - ".github/workflows/publish-place.yml"
   workflow_dispatch:
     inputs:
+      target:
+        description: Primary = main game. Secondary = reserve place.
+        type: choice
+        options:
+          - primary
+          - secondary
+        default: primary
       version_type:
         description: Saved = cloud draft. Published = live place.
         type: choice
@@ -17,9 +24,11 @@ on:
         default: Saved
 
 env:
-  UNIVERSE_ID: "10720619997"
-  PLACE_ID: "81136506656442"
   ROJO_VERSION: "7.7.0"
+  PRIMARY_UNIVERSE_ID: "10720619997"
+  PRIMARY_PLACE_ID: "81136506656442"
+  SECONDARY_UNIVERSE_ID: "10735659349"
+  SECONDARY_PLACE_ID: "113088894576682"
 
 jobs:
   publish:
@@ -48,15 +57,29 @@ jobs:
 
       - name: Publish to Open Cloud
         env:
-          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          TARGET: ${{ github.event.inputs.target || 'primary' }}
           VERSION_TYPE: ${{ github.event.inputs.version_type || 'Published' }}
+          ROBLOX_API_KEY_PRIMARY: ${{ secrets.ROBLOX_API_KEY }}
+          ROBLOX_API_KEY_SECONDARY: ${{ secrets.ROBLOX_API_KEY1 }}
         run: |
           set -euo pipefail
+          if [ "${TARGET}" = "secondary" ]; then
+            UNIVERSE_ID="${SECONDARY_UNIVERSE_ID}"
+            PLACE_ID="${SECONDARY_PLACE_ID}"
+            ROBLOX_API_KEY="${ROBLOX_API_KEY_SECONDARY}"
+            secret_name="ROBLOX_API_KEY1"
+          else
+            UNIVERSE_ID="${PRIMARY_UNIVERSE_ID}"
+            PLACE_ID="${PRIMARY_PLACE_ID}"
+            ROBLOX_API_KEY="${ROBLOX_API_KEY_PRIMARY}"
+            secret_name="ROBLOX_API_KEY"
+          fi
           if [ -z "${ROBLOX_API_KEY}" ]; then
-            echo "Missing secret ROBLOX_API_KEY. Add it in repo Settings → Secrets → Actions."
-            echo "Creator Hub: API key with universe-places:write on this universe."
+            echo "Missing secret ${secret_name}. Add it in repo Settings → Secrets → Actions."
+            echo "Creator Hub: API key with universe-places:write on universe ${UNIVERSE_ID}."
             exit 1
           fi
+          echo "Publishing to ${TARGET} (universe ${UNIVERSE_ID}, place ${PLACE_ID})"
           url="https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=${VERSION_TYPE}"
           echo "POST ${url}"
           curl -sS --fail-with-body -X POST "$url" \

@@ -1,5 +1,7 @@
 {
   "universeId": "10720619997",
   "placeId": "81136506656442",
+  "secondaryUniverseId": "10735659349",
+  "secondaryPlaceId": "113088894576682",
   "openCloudPublish": "https://apis.roblox.com/universes/v1/{universeId}/places/{placeId}/versions"
 }
