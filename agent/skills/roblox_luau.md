@@ -31,7 +31,7 @@ Require shared code as `require(ReplicatedStorage.Shared.<Module>)`.
 
 ## Publish
 
-Sandbox writes are not live. `open_game_pr` (HITL) opens a PR; `merge_game_pr` (HITL) squash-merges to `main`; GitHub Actions then publishes via Open Cloud. Close Studio on the place first (409). Never paste `ROBLOX_API_KEY` or `GAME_GITHUB_TOKEN`.
+Sandbox writes are not live. `open_game_pr` (HITL) opens a PR; `merge_game_pr` (HITL) squash-merges to `main`; GitHub Actions then publishes to the **reserve** place via Open Cloud (pick `primary` only on a manual workflow run). Close Studio on that place first (409). Never paste `ROBLOX_API_KEY` or `GAME_GITHUB_TOKEN`.
 
 ## What this agent cannot do
 

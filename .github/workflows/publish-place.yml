@@ -14,7 +14,7 @@ on:
         options:
           - primary
           - secondary
-        default: primary
+        default: secondary
       version_type:
         description: Saved = cloud draft. Published = live place.
         type: choice
@@ -57,7 +57,7 @@ jobs:
 
       - name: Publish to Open Cloud
         env:
-          TARGET: ${{ github.event.inputs.target || 'primary' }}
+          TARGET: ${{ github.event.inputs.target || 'secondary' }}
           VERSION_TYPE: ${{ github.event.inputs.version_type || 'Published' }}
           ROBLOX_API_KEY_PRIMARY: ${{ secrets.ROBLOX_API_KEY }}
           ROBLOX_API_KEY_SECONDARY: ${{ secrets.ROBLOX_API_KEY1 }}
