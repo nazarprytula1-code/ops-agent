@@ -9,8 +9,8 @@
         "$properties": {
           "Anchored": true,
           "Locked": true,
-          "Size": [512, 16, 512],
-          "Position": [0, -8, 0],
+          "Size": [512, 16, 730],
+          "Position": [0, -8, 109],
           "Color": [0.3882, 0.3725, 0.3882],
           "Material": "Plastic"
         }
