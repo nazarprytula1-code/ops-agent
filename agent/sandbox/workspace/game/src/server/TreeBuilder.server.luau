@@ -1,15 +1,16 @@
 local Workspace = game:GetService("Workspace")
 
--- Builds one simple tree next to the house on server start.
+-- Builds simple trees next to the house on server start.
 -- Follows the same approach as HouseBuilder: anchored, axis-aligned parts
 -- only for the trunk (a plain box, so there's no rotation math and no risk
 -- of a misoriented part). The foliage uses Ball-shaped parts, which look
 -- the same from every angle, so they don't need any rotation either.
 --
 -- Placement: the house is a 24x24 footprint centered at HOUSE_POSITION with
--- its door on the west wall (facing Spawn at world X=0). The tree sits just
--- outside the house's southwest exterior corner, clear of the door gap and
--- clear of the straight walk-up path from Spawn to the door.
+-- its door on the west wall (facing Spawn at world X=0). Both trees sit
+-- just outside the house's west exterior corners, clear of the door gap and
+-- clear of the straight walk-up path from Spawn to the door (one to the
+-- southwest, one to the northwest -- symmetric on either side of that path).
 --
 -- v2: the trunk was computed assuming the ground/baseplate top is exactly
 -- Y=0 (matching default.project.json's Baseplate). If the live place's
@@ -19,17 +20,30 @@ local Workspace = game:GetService("Workspace")
 -- from Slack. The trunk is now grounded with a downward raycast against
 -- whatever is actually there instead of trusting a hardcoded constant, so
 -- it self-corrects regardless of what the live baseplate/terrain Y is.
+--
+-- v3: added a second tree at the mirrored northwest corner per Slack request
+-- ("add another tree near the main house"). Same grounding approach as the
+-- first tree -- no new hardcoded Y assumptions.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local HOUSE_HALF_WIDTH = 12 -- WIDTH / 2 from HouseBuilder
 local HOUSE_HALF_DEPTH = 12 -- DEPTH / 2 from HouseBuilder
 local CORNER_OFFSET = 6 -- studs beyond each exterior wall
 
-local TREE_XZ = Vector3.new(
-	HOUSE_POSITION.X - HOUSE_HALF_WIDTH - CORNER_OFFSET,
-	0,
-	HOUSE_POSITION.Z + HOUSE_HALF_DEPTH + CORNER_OFFSET
-)
+-- Southwest and northwest exterior corners, both clear of the door gap
+-- (west wall) and clear of the straight Spawn -> door walk-up path.
+local TREE_XZ_POSITIONS = {
+	Vector3.new(
+		HOUSE_POSITION.X - HOUSE_HALF_WIDTH - CORNER_OFFSET,
+		0,
+		HOUSE_POSITION.Z + HOUSE_HALF_DEPTH + CORNER_OFFSET
+	),
+	Vector3.new(
+		HOUSE_POSITION.X - HOUSE_HALF_WIDTH - CORNER_OFFSET,
+		0,
+		HOUSE_POSITION.Z - HOUSE_HALF_DEPTH - CORNER_OFFSET
+	),
+}
 
 local FALLBACK_GROUND_Y = 0 -- baseplate top per default.project.json, used only if the raycast finds nothing
 
@@ -44,7 +58,7 @@ local FOLIAGE_COLOR = Color3.fromRGB(48, 110, 46)
 local RAYCAST_HEIGHT = 500 -- start well above anything reasonable and cast straight down
 
 -- Finds the actual top-of-ground Y at (x, z) instead of assuming the
--- baseplate is exactly at Y=0, so the tree always sits on top of whatever
+-- baseplate is exactly at Y=0, so each tree always sits on top of whatever
 -- is really there (baseplate, terrain, or a rebuilt house).
 local function findGroundY(x: number, z: number): number
 	local origin = Vector3.new(x, RAYCAST_HEIGHT, z)
@@ -89,9 +103,9 @@ local function newFoliageBall(name: string, diameter: number, position: Vector3,
 end
 
 -- groundY is the real top-of-ground surface the trunk's bottom rests on.
-local function buildTree(x: number, groundY: number, z: number): Model
+local function buildTree(name: string, x: number, groundY: number, z: number): Model
 	local tree = Instance.new("Model")
-	tree.Name = "Tree"
+	tree.Name = name
 
 	local trunkY = groundY + TRUNK_HEIGHT / 2
 	local trunk = newBoxPart(
@@ -116,11 +130,14 @@ if not Trees then
 	Trees.Parent = Workspace
 end
 
-local existingTree = Trees:FindFirstChild("Tree")
-if existingTree then
-	existingTree:Destroy()
+-- Clear anything built by a previous run (both the old single "Tree" name
+-- and this version's "Tree1"/"Tree2" names) before rebuilding.
+for _, child in ipairs(Trees:GetChildren()) do
+	child:Destroy()
 end
 
-local groundY = findGroundY(TREE_XZ.X, TREE_XZ.Z)
-local tree = buildTree(TREE_XZ.X, groundY, TREE_XZ.Z)
-tree.Parent = Trees
+for index, treeXZ in ipairs(TREE_XZ_POSITIONS) do
+	local groundY = findGroundY(treeXZ.X, treeXZ.Z)
+	local tree = buildTree("Tree" .. index, treeXZ.X, groundY, treeXZ.Z)
+	tree.Parent = Trees
+end
