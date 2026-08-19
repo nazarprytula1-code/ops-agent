@@ -82,8 +82,25 @@ jobs:
           echo "Publishing to ${TARGET} (universe ${UNIVERSE_ID}, place ${PLACE_ID})"
           url="https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=${VERSION_TYPE}"
           echo "POST ${url}"
-          curl -sS --fail-with-body -X POST "$url" \
+          http_code=$(curl -sS -o /tmp/open-cloud-body -w "%{http_code}" -X POST "$url" \
             -H "x-api-key: ${ROBLOX_API_KEY}" \
             -H "Content-Type: application/octet-stream" \
-            --data-binary @place.rbxl
+            --data-binary @place.rbxl)
+          echo "Open Cloud HTTP ${http_code}"
+          cat /tmp/open-cloud-body
           echo
+          case "${http_code}" in
+            200|201) ;;
+            409)
+              echo "409: close Studio / Team Create on this place, then rerun."
+              exit 22
+              ;;
+            401|403)
+              echo "Auth failed for ${secret_name}. Key needs universe-places:write on universe ${UNIVERSE_ID}."
+              exit 22
+              ;;
+            *)
+              echo "Open Cloud publish failed."
+              exit 22
+              ;;
+          esac
