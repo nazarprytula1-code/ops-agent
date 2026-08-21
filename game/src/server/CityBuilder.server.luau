@@ -82,13 +82,25 @@ local TweenService = game:GetService("TweenService")
 -- size is extended again (820->900) so the city's far edge (now further
 -- out) still lands on solid ground.
 
+--
+-- v10: per Slack request, trees must not touch their house. With the old
+-- TREE_OFFSET=9, the tree's leaves ball (radius 2.6) actually overlapped
+-- the house's roof overhang (which sticks out ROOF_OVERHANG=1.5 past the
+-- wall, i.e. HOUSE_SIZE/2+1.5=7.5 from center) by ~0.4 studs. Centering the
+-- tree in the gap between two houses' roofs at the old PITCH=21 only left
+-- ~0.4 studs clearance on each side -- too tight to trust. PITCH is bumped
+-- 21->23 (corner-overlap margin from v8 stays positive at 2 studs, see
+-- buildBlock) to open up that gap, and TREE_OFFSET is retuned to 11.5, the
+-- middle of the new gap, giving ~1.4 studs of clearance from both the
+-- tree's own house and the next house's roof.
+
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
 local BLOCK_SIZE = 94 -- footprint of one quarter, studs
 local ROAD_WIDTH = 20 -- road width between quarters and around the outer edge
 local ROW_INSET = 10 -- distance from a block's edge to its house row centerline
-local PITCH = 21 -- spacing between the 3 house centers along one row
-local TREE_OFFSET = 9 -- how far the tree sits from its house, along the row
+local PITCH = 23 -- spacing between the 3 house centers along one row
+local TREE_OFFSET = 11.5 -- how far the tree sits from its house, along the row
 local CITY_ORIGIN = Vector3.new(0, 0, 300) -- still walkable from Spawn (0,0,0); pushed back from 260 per Slack (v9) for more clearance from the starter house (24,0,0)
 
 local CITY_SIZE = GRID_SIZE * BLOCK_SIZE + (GRID_SIZE + 1) * ROAD_WIDTH
