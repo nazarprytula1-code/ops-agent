@@ -4,17 +4,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 local FootballConfig = require(ReplicatedStorage.Shared.FootballConfig)
 
--- Builds a tall perimeter fence around the football pitch, per Slack
--- request ("...зроби високу огороджу для футбольного поля"). Sits
+-- Builds a low perimeter fence around the football pitch, per Slack
+-- request (originally "...зроби високу огороджу...", then later "...зроби
+-- маленькою, щоби можна було через неї перестрибувати" -- low enough for a
+-- normal jump to clear it, see FootballConfig.FENCE_HEIGHT). Sits
 -- FENCE_END_MARGIN/FENCE_SIDE_MARGIN beyond the pitch's goal lines/
 -- touchlines (see FootballConfig), so it clears the goal nets on both ends
 -- instead of clipping through them.
 --
--- The two side fences (north/south, running along X) each leave a
--- FENCE_ENTRANCE_WIDTH gap in the middle so players can walk onto the pitch
--- on foot -- FENCE_HEIGHT is well above normal jump height, so without a
--- gap the fence would wall players out entirely. The two end fences (west/
--- east, running along Z, behind each goal) are solid.
+-- The two side fences (north/south, running along X) each still leave a
+-- FENCE_ENTRANCE_WIDTH gap in the middle, for players who'd rather walk in
+-- than jump. The two end fences (west/east, running along Z, behind each
+-- goal) are solid.
 --
 -- Axis-aligned boxes only, same approach as FootballFieldBuilder/
 -- HouseBuilder/CarBuilder/TreeBuilder: every panel runs straight along
