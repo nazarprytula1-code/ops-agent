@@ -47,6 +47,14 @@ local TweenService = game:GetService("TweenService")
 -- file's existing no-rotation style) climbs the gap between the two
 -- floors, tucked against NorthWall and centered in X so it stays clear of
 -- both the door (WestWall) and the beds (against EastWall).
+--
+-- v9: Floor2 used to be one solid slab covering the entire footprint,
+-- including directly above the staircase, so climbing players hit their
+-- head on it and got stuck a few steps from the top (the "поремонтуй"
+-- report from Slack, screenshot showed a player wedged looking up at the
+-- Floor2 ceiling). Floor2 is now built from 4 strips that leave a
+-- stairwell-shaped hole with headroom the whole way up. See the v9 note by
+-- the Floor2 construction in buildHouse for the exact geometry.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 28
@@ -333,15 +341,67 @@ local function buildHouse(basePosition: Vector3): Model
 	buildBed(bedX, basePosition.Z - BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
 	buildBed(bedX, basePosition.Z + BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
 
+	-- Staircase geometry (v8/v9): computed before Floor2 so Floor2 can carve
+	-- out a matching stairwell hole (v9) -- see below. Starts flush against
+	-- the inside of NorthWall and runs along +Z, centered in X so it stays
+	-- clear of the door (WestWall) and the beds (against EastWall).
+	local firstFloorSurfaceY = floorY + 0.5
+	local climb = FLOOR_THICKNESS + WALL_HEIGHT
+	local stepHeight = climb / STAIR_STEP_COUNT
+	local stairStartZ = basePosition.Z - halfDepth + WALL_THICKNESS / 2
+	local stairRunZ = STAIR_STEP_COUNT * STAIR_STEP_DEPTH
+
 	-- Second floor (v8): a windowed box identical in footprint to the first
 	-- floor, sitting directly on top of the first floor's walls. Floor2's
 	-- bottom is flush with wallTop (the first floor's wall top), and all 4
 	-- sides get a window -- no door needed since you reach it via Stairs.
+	--
+	-- v9: Floor2 used to be one solid slab covering the WHOLE footprint,
+	-- including directly above the staircase -- so climbing players hit a
+	-- solid ceiling a few steps from the top and got stuck (the "поремонтуй"
+	-- report from Slack: a player wedged under the Floor2 ceiling, looking up
+	-- at its underside). Floor2 is now built as 4 strips (left/right of the
+	-- stairwell, plus north/south slivers within the stairwell's own X band)
+	-- that leave a rectangular hole exactly where the staircase needs
+	-- headroom, with STAIRWELL_MARGIN studs of clearance on the open sides so
+	-- players don't clip the edges while walking through.
 	local floorY2 = wallTop + 0.5
+	local STAIRWELL_MARGIN = 1
+	local holeXMin = basePosition.X - STAIR_WIDTH / 2 - STAIRWELL_MARGIN
+	local holeXMax = basePosition.X + STAIR_WIDTH / 2 + STAIRWELL_MARGIN
+	local holeZMin = stairStartZ -- flush with NorthWall's inner face; the wall itself already bounds this side
+	local holeZMax = stairStartZ + stairRunZ + STAIRWELL_MARGIN
+
+	local northZ = basePosition.Z - halfDepth
+	local southZ = basePosition.Z + halfDepth
+	local westXEdge = basePosition.X - halfWidth
+	local eastXEdge = basePosition.X + halfWidth
+
 	newPart(
-		"Floor2",
-		Vector3.new(WIDTH, FLOOR_THICKNESS, DEPTH),
-		Vector3.new(basePosition.X, floorY2, basePosition.Z),
+		"Floor2West",
+		Vector3.new(holeXMin - westXEdge, FLOOR_THICKNESS, DEPTH),
+		Vector3.new((westXEdge + holeXMin) / 2, floorY2, basePosition.Z),
+		Color3.fromRGB(96, 72, 48),
+		house
+	)
+	newPart(
+		"Floor2East",
+		Vector3.new(eastXEdge - holeXMax, FLOOR_THICKNESS, DEPTH),
+		Vector3.new((holeXMax + eastXEdge) / 2, floorY2, basePosition.Z),
+		Color3.fromRGB(96, 72, 48),
+		house
+	)
+	newPart(
+		"Floor2North",
+		Vector3.new(holeXMax - holeXMin, FLOOR_THICKNESS, holeZMin - northZ),
+		Vector3.new(basePosition.X, floorY2, (northZ + holeZMin) / 2),
+		Color3.fromRGB(96, 72, 48),
+		house
+	)
+	newPart(
+		"Floor2South",
+		Vector3.new(holeXMax - holeXMin, FLOOR_THICKNESS, southZ - holeZMax),
+		Vector3.new(basePosition.X, floorY2, (holeZMax + southZ) / 2),
 		Color3.fromRGB(96, 72, 48),
 		house
 	)
@@ -357,14 +417,8 @@ local function buildHouse(basePosition: Vector3): Model
 	-- Staircase (v8): STAIR_STEP_COUNT solid blocks, each one step taller
 	-- than the last -- a classic blocky staircase, no ramps or rotation.
 	-- Together they climb the full gap between the first floor's surface and
-	-- the second floor's surface (FLOOR_THICKNESS + WALL_HEIGHT studs).
-	-- Starts flush against the inside of NorthWall and runs along +Z,
-	-- centered in X so it stays clear of the door (WestWall) and the beds
-	-- (against EastWall).
-	local firstFloorSurfaceY = floorY + 0.5
-	local climb = FLOOR_THICKNESS + WALL_HEIGHT
-	local stepHeight = climb / STAIR_STEP_COUNT
-	local stairStartZ = basePosition.Z - halfDepth + WALL_THICKNESS / 2
+	-- the second floor's surface (FLOOR_THICKNESS + WALL_HEIGHT studs), now
+	-- with open headroom the whole way up thanks to the v9 Floor2 hole above.
 	for i = 1, STAIR_STEP_COUNT do
 		local stepFullHeight = i * stepHeight
 		local stepZ = stairStartZ + STAIR_STEP_DEPTH * (i - 0.5)
