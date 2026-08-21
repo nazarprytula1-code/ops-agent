@@ -36,6 +36,17 @@ local TweenService = game:GetService("TweenService")
 -- idea as the door's Near/Far/Lintel segments), with a Glass part filling
 -- the resulting hole so you can actually see through it, not just a painted
 -- square. See buildWindowedWall.
+--
+-- v8: per Slack request, this house now has a second floor. Floor2 sits
+-- directly on top of the first floor's walls (its bottom = the first
+-- floor's wallTop) and is a windowed box just like the first floor (all 4
+-- sides this time, since there's no need for a second front door -- you
+-- reach it via the Stairs). The roof moves up to sit on the SECOND floor's
+-- walls instead of the first floor's. A blocky staircase (StairN parts,
+-- each one step taller than the last -- no ramps/rotation, matching this
+-- file's existing no-rotation style) climbs the gap between the two
+-- floors, tucked against NorthWall and centered in X so it stays clear of
+-- both the door (WestWall) and the beds (against EastWall).
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 28
@@ -72,6 +83,13 @@ local WINDOW_HEIGHT = 8
 local WINDOW_SILL_HEIGHT = 10 -- floor-to-sill; lintel above is WALL_HEIGHT - this - WINDOW_HEIGHT
 local WINDOW_COLOR = Color3.fromRGB(190, 230, 255)
 local WINDOW_TRANSPARENCY = 0.55
+
+-- Floor slabs + staircase (v8 note above)
+local FLOOR_THICKNESS = 1
+local STAIR_STEP_COUNT = 15 -- how many blocky steps climb from floor 1 to floor 2
+local STAIR_STEP_DEPTH = 1.2 -- how far each step advances along Z
+local STAIR_WIDTH = 4
+local STAIR_COLOR = Color3.fromRGB(130, 95, 60)
 
 local function newPart(name: string, size: Vector3, position: Vector3, color: Color3, parent: Instance): Part
 	local part = Instance.new("Part")
@@ -248,7 +266,7 @@ local function buildHouse(basePosition: Vector3): Model
 	local floorY = basePosition.Y + 0.5
 	local floor = newPart(
 		"Floor",
-		Vector3.new(WIDTH, 1, DEPTH),
+		Vector3.new(WIDTH, FLOOR_THICKNESS, DEPTH),
 		Vector3.new(basePosition.X, floorY, basePosition.Z),
 		Color3.fromRGB(96, 72, 48),
 		house
@@ -315,8 +333,55 @@ local function buildHouse(basePosition: Vector3): Model
 	buildBed(bedX, basePosition.Z - BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
 	buildBed(bedX, basePosition.Z + BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
 
+	-- Second floor (v8): a windowed box identical in footprint to the first
+	-- floor, sitting directly on top of the first floor's walls. Floor2's
+	-- bottom is flush with wallTop (the first floor's wall top), and all 4
+	-- sides get a window -- no door needed since you reach it via Stairs.
+	local floorY2 = wallTop + 0.5
+	newPart(
+		"Floor2",
+		Vector3.new(WIDTH, FLOOR_THICKNESS, DEPTH),
+		Vector3.new(basePosition.X, floorY2, basePosition.Z),
+		Color3.fromRGB(96, 72, 48),
+		house
+	)
+
+	local wallTop2 = floorY2 + 0.5 + WALL_HEIGHT
+	local wallY2 = floorY2 + 0.5 + WALL_HEIGHT / 2
+
+	buildWindowedWall("NorthWall2", "X", basePosition.Z - halfDepth, basePosition.X, WIDTH, wallY2, floorY2, house)
+	buildWindowedWall("SouthWall2", "X", basePosition.Z + halfDepth, basePosition.X, WIDTH, wallY2, floorY2, house)
+	buildWindowedWall("EastWall2", "Z", basePosition.X + halfWidth, basePosition.Z, DEPTH, wallY2, floorY2, house)
+	buildWindowedWall("WestWall2", "Z", basePosition.X - halfWidth, basePosition.Z, DEPTH, wallY2, floorY2, house)
+
+	-- Staircase (v8): STAIR_STEP_COUNT solid blocks, each one step taller
+	-- than the last -- a classic blocky staircase, no ramps or rotation.
+	-- Together they climb the full gap between the first floor's surface and
+	-- the second floor's surface (FLOOR_THICKNESS + WALL_HEIGHT studs).
+	-- Starts flush against the inside of NorthWall and runs along +Z,
+	-- centered in X so it stays clear of the door (WestWall) and the beds
+	-- (against EastWall).
+	local firstFloorSurfaceY = floorY + 0.5
+	local climb = FLOOR_THICKNESS + WALL_HEIGHT
+	local stepHeight = climb / STAIR_STEP_COUNT
+	local stairStartZ = basePosition.Z - halfDepth + WALL_THICKNESS / 2
+	for i = 1, STAIR_STEP_COUNT do
+		local stepFullHeight = i * stepHeight
+		local stepZ = stairStartZ + STAIR_STEP_DEPTH * (i - 0.5)
+		local step = newPart(
+			"Stair" .. i,
+			Vector3.new(STAIR_WIDTH, stepFullHeight, STAIR_STEP_DEPTH),
+			Vector3.new(basePosition.X, firstFloorSurfaceY + stepFullHeight / 2, stepZ),
+			STAIR_COLOR,
+			house
+		)
+		step.Material = Enum.Material.Wood
+	end
+
 	-- Flat overhanging roof: two stacked axis-aligned slabs, no rotation.
-	local roofY = wallTop + ROOF_THICKNESS / 2
+	-- Now sits on the SECOND floor's walls (wallTop2), not the first
+	-- floor's.
+	local roofY = wallTop2 + ROOF_THICKNESS / 2
 	newPart(
 		"RoofSlab",
 		Vector3.new(WIDTH + ROOF_OVERHANG * 2, ROOF_THICKNESS, DEPTH + ROOF_OVERHANG * 2),
