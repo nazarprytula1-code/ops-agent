@@ -1,10 +1,10 @@
 local FootballConfig = {}
 
 -- Shared by FootballFieldBuilder.server.luau, FieldFenceBuilder.server.luau,
--- ScoreboardBuilder.server.luau, BallBuilder.server.luau, BallKick.server.luau
--- and GoalScoring.server.luau so the pitch, fence, scoreboard and ball agree
--- on where the field is without those scripts depending on each other's run
--- order.
+-- BallBoundaryBuilder.server.luau, ScoreboardBuilder.server.luau,
+-- BallBuilder.server.luau, BallKick.server.luau and GoalScoring.server.luau
+-- so the pitch, fence, ball boundary, scoreboard and ball agree on where the
+-- field is without those scripts depending on each other's run order.
 --
 -- Placement: FIELD_POSITION is chosen clear of every other builder on the
 -- Baseplate (see default.project.json, size [512, 16, 730] at [0, -8, 109],
@@ -53,6 +53,16 @@ FootballConfig.FENCE_SIDE_MARGIN = 4 -- beyond the touchlines (Z), where the two
 FootballConfig.FENCE_END_MARGIN = FootballConfig.GOAL_NET_GAP + FootballConfig.GOAL_DEPTH + 4 -- beyond the goal lines (X), clears the goal net
 FootballConfig.FENCE_ENTRANCE_WIDTH = 14 -- gap left in the middle of each side fence for players to walk through
 
+-- Invisible ball-only boundary right at the pitch edge (not the fence out
+-- past it), per Slack request ("на межі поля (крім воріт) є невидима
+-- стіна (діє тільки на м'яч), яка не дає м'ячу викотитися за межу поля").
+-- Sits exactly on the touchlines (full length) and the goal lines (except
+-- the goal mouth, so the ball can still enter the goal) -- see
+-- BallBoundaryBuilder.server.luau and BallCollision.luau (which is what
+-- makes it ignore players/everything else).
+FootballConfig.BALL_BOUNDARY_HEIGHT = 4
+FootballConfig.BALL_BOUNDARY_THICKNESS = 0.5
+
 -- Goal counting + scoreboard, per Slack request ("зроби лічильник (велике
 -- табло) голів..."). TEAM_A defends the west goal (at FIELD_POSITION.X -
 -- FIELD_LENGTH/2) and scores when the ball enters the east goal; TEAM_B
@@ -64,12 +74,17 @@ FootballConfig.GOAL_RESPAWN_DELAY = 1 -- seconds the ball stays hidden after a g
 
 -- Scoreboard sits just past the north side fence (outside FENCE_SIDE_MARGIN),
 -- straddling the entrance gap like an arch, tall enough to be seen over the
--- fence from anywhere on the pitch.
+-- fence from anywhere on the pitch. The score display is a fixed SurfaceGui
+-- on the Board part (not a BillboardGui) per Slack request ("зроби
+-- нерухомим") -- it no longer turns to always face the camera, it just sits
+-- there like a real sign, facing south toward the pitch.
 FootballConfig.SCOREBOARD_OFFSET_BEYOND_FENCE = 6 -- how far past the north fence line the poles stand
-FootballConfig.SCOREBOARD_POLE_HEIGHT = 30
-FootballConfig.SCOREBOARD_POLE_SPACING = 10 -- distance between the two support poles
+FootballConfig.SCOREBOARD_POLE_HEIGHT = 26
+FootballConfig.SCOREBOARD_POLE_SPACING = 16 -- distance between the two support poles
 FootballConfig.SCOREBOARD_POLE_THICKNESS = 1.5
-FootballConfig.SCOREBOARD_CROSSBAR_THICKNESS = 1.5
+FootballConfig.SCOREBOARD_BOARD_WIDTH = 24
+FootballConfig.SCOREBOARD_BOARD_HEIGHT = 9
+FootballConfig.SCOREBOARD_BOARD_THICKNESS = 1.5
 
 FootballConfig.FOLDER_NAME = "FootballField"
 FootballConfig.BALL_NAME = "Ball"

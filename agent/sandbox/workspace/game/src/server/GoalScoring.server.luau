@@ -38,7 +38,7 @@ local Field = Workspace:WaitForChild(FootballConfig.FOLDER_NAME)
 local ball = Field:WaitForChild(FootballConfig.BALL_NAME) :: BasePart
 local scoreText = Field
 	:WaitForChild("Scoreboard")
-	:WaitForChild("Crossbar")
+	:WaitForChild("Board")
 	:WaitForChild("ScoreboardGui")
 	:WaitForChild("Background")
 	:WaitForChild("ScoreText") :: TextLabel
