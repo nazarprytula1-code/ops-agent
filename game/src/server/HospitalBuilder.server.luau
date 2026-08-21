@@ -9,17 +9,24 @@ local TweenService = game:GetService("TweenService")
 -- Placement: Spawn is at world (0,0,0), the starter house sits at (24,0,0)
 -- and the city grid sits around (0,0,260) (see CityBuilder.server.luau).
 --
--- v2: moved per Slack request ("постав в інше місце" -- "put it somewhere
--- else") from (-50, 0, 0) to (-90, 0, -60): further southwest of Spawn, so
--- it reads as clearly its own building instead of crowding the west side of
--- Spawn right next to where it was. Footprint (half width 18, half depth 14)
--- keeps it clear of Spawn's pad (X in [-6,6], Z in [-6,6]), the starter
--- house (X in [12,36], Z in [-12,12]) and the city grid (Z >= 74), while
--- staying on the Baseplate (X spans [-256,256], Z spans [-256,474] per
--- default.project.json). The entrance still faces +X (the EastWall), i.e.
--- generally back toward Spawn.
+-- v2: moved from (-50, 0, 0) to (-90, 0, -60) (southwest of Spawn) per an
+-- earlier Slack request.
+--
+-- v3: moved again per Slack request -- the southwest spot from v2 landed on
+-- a football field that exists in the live Studio place but is not part of
+-- this Rojo source tree (no script/position for it anywhere under game/),
+-- so it can't be avoided by reading the code alone. This puts the hospital
+-- on the opposite side instead: due east, past the starter house, at
+-- (150, 0, -40). Footprint (half width 18, half depth 14) keeps it clear of
+-- Spawn's pad (X in [-6,6], Z in [-6,6]), the starter house (X in [12,36],
+-- Z in [-12,12]) and the city grid (Z >= 74), while staying on the
+-- Baseplate (X spans [-256,256], Z spans [-256,474] per
+-- default.project.json). The entrance now faces -X (the WestWall), i.e.
+-- back toward Spawn/the house, since the building is east of Spawn now.
+-- If this still overlaps the football field, tell us roughly where the
+-- field is (or its Studio Position/Size) and we'll move it precisely.
 
-local HOSPITAL_POSITION = Vector3.new(-90, 0, -60)
+local HOSPITAL_POSITION = Vector3.new(150, 0, -40)
 local WALL_HEIGHT = 36
 local WIDTH = 36
 local DEPTH = 28
@@ -35,7 +42,7 @@ local ROOF_THICKNESS = 2
 local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
 
--- Cross sign centered above the entrance, on the EastWall face.
+-- Cross sign centered above the entrance, on the WestWall face.
 local CROSS_ARM_LENGTH = 8
 local CROSS_ARM_WIDTH = 2.4
 local CROSS_THICKNESS = 0.6
@@ -119,7 +126,7 @@ local function buildHospital(basePosition: Vector3): Model
 	local halfWidth = WIDTH / 2
 	local halfDepth = DEPTH / 2
 
-	-- North, South and West walls are solid.
+	-- North, South and East walls are solid.
 	newPart(
 		"NorthWall",
 		Vector3.new(WIDTH, WALL_HEIGHT, WALL_THICKNESS),
@@ -135,36 +142,37 @@ local function buildHospital(basePosition: Vector3): Model
 		hospital
 	)
 	newPart(
-		"WestWall",
+		"EastWall",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, DEPTH),
-		Vector3.new(basePosition.X - halfWidth, wallY, basePosition.Z),
+		Vector3.new(basePosition.X + halfWidth, wallY, basePosition.Z),
 		WALL_COLOR,
 		hospital
 	)
 
-	-- East wall faces generally back toward Spawn. It has the doorway: two
-	-- side segments plus a lintel above the gap, plus a real openable door.
-	local eastX = basePosition.X + halfWidth
+	-- West wall faces back toward Spawn/the starter house (the building is
+	-- now east of both). It has the doorway: two side segments plus a
+	-- lintel above the gap, plus a real openable door.
+	local westX = basePosition.X - halfWidth
 	local sideSegmentDepth = (DEPTH - DOOR_WIDTH) / 2
 	newPart(
-		"EastWallNear",
+		"WestWallNear",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSegmentDepth),
-		Vector3.new(eastX, wallY, basePosition.Z - halfDepth + sideSegmentDepth / 2),
+		Vector3.new(westX, wallY, basePosition.Z - halfDepth + sideSegmentDepth / 2),
 		WALL_COLOR,
 		hospital
 	)
 	newPart(
-		"EastWallFar",
+		"WestWallFar",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSegmentDepth),
-		Vector3.new(eastX, wallY, basePosition.Z + halfDepth - sideSegmentDepth / 2),
+		Vector3.new(westX, wallY, basePosition.Z + halfDepth - sideSegmentDepth / 2),
 		WALL_COLOR,
 		hospital
 	)
 	local lintelHeight = WALL_HEIGHT - DOOR_HEIGHT
 	newPart(
-		"EastWallLintel",
+		"WestWallLintel",
 		Vector3.new(WALL_THICKNESS, lintelHeight, DOOR_WIDTH),
-		Vector3.new(eastX, floorY + 0.5 + DOOR_HEIGHT + lintelHeight / 2, basePosition.Z),
+		Vector3.new(westX, floorY + 0.5 + DOOR_HEIGHT + lintelHeight / 2, basePosition.Z),
 		WALL_COLOR,
 		hospital
 	)
@@ -175,7 +183,7 @@ local function buildHospital(basePosition: Vector3): Model
 	local door = newPart(
 		"Door",
 		Vector3.new(WALL_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH),
-		Vector3.new(eastX, doorY, basePosition.Z),
+		Vector3.new(westX, doorY, basePosition.Z),
 		DOOR_COLOR,
 		hospital
 	)
@@ -183,7 +191,7 @@ local function buildHospital(basePosition: Vector3): Model
 	door.CanCollide = true
 
 	local hingeZ = basePosition.Z - DOOR_WIDTH / 2
-	setupSwingingDoor(door, eastX, hingeZ)
+	setupSwingingDoor(door, westX, hingeZ)
 
 	-- Flat overhanging roof, plus a red trim band -- same two-slab,
 	-- axis-aligned approach as HouseBuilder.server.luau (no rotation math).
@@ -204,10 +212,10 @@ local function buildHospital(basePosition: Vector3): Model
 	)
 
 	-- Red cross sign centered above the entrance, mounted flush on the
-	-- EastWall face (a hair in front of the lintel so it doesn't z-fight).
+	-- WestWall face (a hair in front of the lintel so it doesn't z-fight).
 	local crossZ = basePosition.Z
 	local crossY = wallTop - CROSS_ARM_LENGTH / 2 - 1
-	local crossX = eastX + WALL_THICKNESS / 2 + CROSS_THICKNESS / 2
+	local crossX = westX - WALL_THICKNESS / 2 - CROSS_THICKNESS / 2
 	newPart(
 		"CrossVertical",
 		Vector3.new(CROSS_THICKNESS, CROSS_ARM_LENGTH, CROSS_ARM_WIDTH),
