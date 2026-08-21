@@ -8,13 +8,18 @@ local TweenService = game:GetService("TweenService")
 --
 -- Placement: Spawn is at world (0,0,0), the starter house sits at (24,0,0)
 -- and the city grid sits around (0,0,260) (see CityBuilder.server.luau).
--- HOSPITAL_POSITION = (-50, 0, 0) keeps the hospital's footprint (half
--- width 18 -> X in [-68,-32]) clear of Spawn's pad (X in [-6,6]), the
--- starter house (X in [12,36]) and the city, while staying on the
--- Baseplate (X spans [-256,256], Z spans [-256,474] per default.project.json).
--- The entrance faces +X (the EastWall), i.e. toward Spawn.
+--
+-- v2: moved per Slack request ("постав в інше місце" -- "put it somewhere
+-- else") from (-50, 0, 0) to (-90, 0, -60): further southwest of Spawn, so
+-- it reads as clearly its own building instead of crowding the west side of
+-- Spawn right next to where it was. Footprint (half width 18, half depth 14)
+-- keeps it clear of Spawn's pad (X in [-6,6], Z in [-6,6]), the starter
+-- house (X in [12,36], Z in [-12,12]) and the city grid (Z >= 74), while
+-- staying on the Baseplate (X spans [-256,256], Z spans [-256,474] per
+-- default.project.json). The entrance still faces +X (the EastWall), i.e.
+-- generally back toward Spawn.
 
-local HOSPITAL_POSITION = Vector3.new(-50, 0, 0)
+local HOSPITAL_POSITION = Vector3.new(-90, 0, -60)
 local WALL_HEIGHT = 36
 local WIDTH = 36
 local DEPTH = 28
@@ -137,10 +142,8 @@ local function buildHospital(basePosition: Vector3): Model
 		hospital
 	)
 
-	-- East wall faces Spawn (Spawn is at world X=0, this building is at
-	-- X=-50, so walking straight from Spawn reaches the +X wall first).
-	-- It has the doorway: two side segments plus a lintel above the gap,
-	-- plus a real openable door.
+	-- East wall faces generally back toward Spawn. It has the doorway: two
+	-- side segments plus a lintel above the gap, plus a real openable door.
 	local eastX = basePosition.X + halfWidth
 	local sideSegmentDepth = (DEPTH - DOOR_WIDTH) / 2
 	newPart(
