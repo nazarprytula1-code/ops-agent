@@ -41,13 +41,16 @@ FootballConfig.POST_THICKNESS = 2
 FootballConfig.BALL_DIAMETER = 2.2
 FootballConfig.BALL_GROUND_CLEARANCE = 0.05 -- small gap above the pitch so the ball never spawns overlapping it
 
--- Tall perimeter fence around the pitch, per Slack request ("...зроби
--- високу огороджу для футбольного поля"). Sits outside the pitch boundary
--- (and outside the goal nets on the two ends) so it doesn't clip through
--- them, with a walk-through gap in each side fence so players can still
--- reach the pitch on foot -- a fence this tall would otherwise wall players
--- out entirely, since it's well above normal jump height.
-FootballConfig.FENCE_HEIGHT = 20
+-- Low perimeter fence around the pitch, per Slack request (originally
+-- "...зроби високу огороджу...", then "...зроби маленькою, щоби можна було
+-- через неї перестрибувати" -- low enough that a normal jump clears it, so
+-- it's more of a boundary marker than a real barrier). Sits outside the
+-- pitch boundary (and outside the goal nets on the two ends) so it doesn't
+-- clip through them. Default Roblox jump (JumpPower 50, Gravity ~196.2)
+-- clears about 6.3 studs, so FENCE_HEIGHT stays comfortably under that.
+-- Each side fence also still has a walk-through gap (see
+-- FENCE_ENTRANCE_WIDTH below) for players who'd rather not jump at all.
+FootballConfig.FENCE_HEIGHT = 4
 FootballConfig.FENCE_THICKNESS = 0.6
 FootballConfig.FENCE_SIDE_MARGIN = 4 -- beyond the touchlines (Z), where the two long fences sit
 FootballConfig.FENCE_END_MARGIN = FootballConfig.GOAL_NET_GAP + FootballConfig.GOAL_DEPTH + 4 -- beyond the goal lines (X), clears the goal net
