@@ -6,7 +6,9 @@ local FootballConfig = require(ReplicatedStorage.Shared.FootballConfig)
 
 -- Places one kickable ball at the center of the pitch built by
 -- FootballFieldBuilder.server.luau, per Slack request ("...і один м'яч").
--- See BallKick.server.luau for how players kick it.
+-- See BallKick.server.luau for how players kick it and
+-- GoalScoring.server.luau for how it gets reset to this same spot after a
+-- goal.
 --
 -- Reads the ground independently via the same GroundUtils call and the same
 -- FootballConfig.FIELD_POSITION that FootballFieldBuilder uses, instead of
@@ -21,6 +23,7 @@ local BALL_COLOR = Color3.fromRGB(255, 255, 255)
 local FIELD = FootballConfig.FIELD_POSITION
 local PITCH_THICKNESS = FootballConfig.PITCH_THICKNESS
 local BALL_DIAMETER = FootballConfig.BALL_DIAMETER
+local BALL_GROUND_CLEARANCE = FootballConfig.BALL_GROUND_CLEARANCE
 
 local Field = Workspace:FindFirstChild(FootballConfig.FOLDER_NAME)
 if not Field then
@@ -36,7 +39,7 @@ end
 
 local groundY = GroundUtils.findGroundY(FIELD.X, FIELD.Z, Field)
 local pitchTopY = groundY + PITCH_THICKNESS
-local ballY = pitchTopY + BALL_DIAMETER / 2 + 0.05 -- small clearance so it doesn't spawn overlapping the pitch
+local ballY = pitchTopY + BALL_DIAMETER / 2 + BALL_GROUND_CLEARANCE
 
 local ball = Instance.new("Part")
 ball.Name = FootballConfig.BALL_NAME
