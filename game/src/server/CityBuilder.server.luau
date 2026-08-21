@@ -94,6 +94,14 @@ local TweenService = game:GetService("TweenService")
 -- middle of the new gap, giving ~1.4 studs of clearance from both the
 -- tree's own house and the next house's roof.
 
+-- tree's own house and the next house's roof.
+--
+-- v11: per Slack request, every solid wall on every city house (the 3 walls
+-- that aren't the door wall) now gets a real see-through window -- same
+-- approach as HouseBuilder.server.luau's buildWindowedWall: split the solid
+-- wall into left/right (or near/far) segments plus a sill below and a
+-- lintel above, with a Glass part filling the resulting hole.
+
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
 local BLOCK_SIZE = 94 -- footprint of one quarter, studs
@@ -163,6 +171,13 @@ local BED_FRAME_COLOR = Color3.fromRGB(92, 64, 40)
 local BED_MATTRESS_COLOR = Color3.fromRGB(235, 235, 225)
 local BED_PILLOW_COLOR = Color3.fromRGB(250, 250, 250)
 local BED_BLANKET_COLOR = Color3.fromRGB(150, 40, 40)
+
+-- Window (one per solid wall per house -- see v11 note above)
+local WINDOW_WIDTH = 4
+local WINDOW_HEIGHT = 4
+local WINDOW_SILL_HEIGHT = 5 -- floor-to-sill; lintel above is WALL_HEIGHT - this - WINDOW_HEIGHT
+local WINDOW_COLOR = Color3.fromRGB(190, 230, 255)
+local WINDOW_TRANSPARENCY = 0.55
 
 -- Tree
 local TREE_TRUNK_HEIGHT = 4
@@ -297,6 +312,65 @@ local function buildBed(x: number, z: number, floorY: number, axis: string, sign
 	return bed
 end
 
+-- Builds a solid wall with a real see-through window cut into its middle:
+-- two side segments, a sill below the window, a lintel above it, and a
+-- Glass part filling the gap (mirrors how the door's Near/Far/Lintel
+-- segments work, just with a Sill added and no ProximityPrompt). Mirrors
+-- HouseBuilder.server.luau's buildWindowedWall. `axis` is which world axis
+-- the wall's *length* runs along ("X" for North/South walls, "Z" for
+-- West/East walls); `normalCoord` is the wall's fixed coordinate on the
+-- other axis; `alongCenter` is the wall's center and `wallLength` its
+-- length along `axis`.
+local function buildWindowedWall(name: string, axis: string, normalCoord: number, alongCenter: number, wallLength: number, wallY: number, floorY: number, parent: Instance)
+	local sideSpan = (wallLength - WINDOW_WIDTH) / 2
+	local lintelHeight = WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEIGHT
+	local sillY = floorY + 0.5 + WINDOW_SILL_HEIGHT / 2
+	local windowY = floorY + 0.5 + WINDOW_SILL_HEIGHT + WINDOW_HEIGHT / 2
+	local lintelY = floorY + 0.5 + WINDOW_SILL_HEIGHT + WINDOW_HEIGHT + lintelHeight / 2
+
+	local glass: Part
+	if axis == "X" then
+		newPart(
+			name .. "Left",
+			Vector3.new(sideSpan, WALL_HEIGHT, WALL_THICKNESS),
+			Vector3.new(alongCenter - wallLength / 2 + sideSpan / 2, wallY, normalCoord),
+			WALL_COLOR,
+			parent
+		)
+		newPart(
+			name .. "Right",
+			Vector3.new(sideSpan, WALL_HEIGHT, WALL_THICKNESS),
+			Vector3.new(alongCenter + wallLength / 2 - sideSpan / 2, wallY, normalCoord),
+			WALL_COLOR,
+			parent
+		)
+		newPart(name .. "Sill", Vector3.new(WINDOW_WIDTH, WINDOW_SILL_HEIGHT, WALL_THICKNESS), Vector3.new(alongCenter, sillY, normalCoord), WALL_COLOR, parent)
+		newPart(name .. "Lintel", Vector3.new(WINDOW_WIDTH, lintelHeight, WALL_THICKNESS), Vector3.new(alongCenter, lintelY, normalCoord), WALL_COLOR, parent)
+		glass = newPart(name .. "Window", Vector3.new(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS), Vector3.new(alongCenter, windowY, normalCoord), WINDOW_COLOR, parent)
+	else
+		newPart(
+			name .. "Near",
+			Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSpan),
+			Vector3.new(normalCoord, wallY, alongCenter - wallLength / 2 + sideSpan / 2),
+			WALL_COLOR,
+			parent
+		)
+		newPart(
+			name .. "Far",
+			Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSpan),
+			Vector3.new(normalCoord, wallY, alongCenter + wallLength / 2 - sideSpan / 2),
+			WALL_COLOR,
+			parent
+		)
+		newPart(name .. "Sill", Vector3.new(WALL_THICKNESS, WINDOW_SILL_HEIGHT, WINDOW_WIDTH), Vector3.new(normalCoord, sillY, alongCenter), WALL_COLOR, parent)
+		newPart(name .. "Lintel", Vector3.new(WALL_THICKNESS, lintelHeight, WINDOW_WIDTH), Vector3.new(normalCoord, lintelY, alongCenter), WALL_COLOR, parent)
+		glass = newPart(name .. "Window", Vector3.new(WALL_THICKNESS, WINDOW_HEIGHT, WINDOW_WIDTH), Vector3.new(normalCoord, windowY, alongCenter), WINDOW_COLOR, parent)
+	end
+
+	glass.Material = Enum.Material.Glass
+	glass.Transparency = WINDOW_TRANSPARENCY
+end
+
 -- A simple two-part tree: a vertical trunk and a ball of leaves on top.
 local function buildTree(position: Vector3): Model
 	local tree = Instance.new("Model")
@@ -391,13 +465,7 @@ local function buildCityHouse(center: Vector3, doorAxis: string, doorSign: numbe
 			door.CanCollide = true
 			setupSwingingDoor(door, "Z", sign, center.X - DOOR_WIDTH / 2, wallZ)
 		else
-			newPart(
-				sign < 0 and "NorthWall" or "SouthWall",
-				Vector3.new(HOUSE_SIZE, WALL_HEIGHT, WALL_THICKNESS),
-				Vector3.new(center.X, wallY, wallZ),
-				WALL_COLOR,
-				house
-			)
+			buildWindowedWall(sign < 0 and "NorthWall" or "SouthWall", "X", wallZ, center.X, HOUSE_SIZE, wallY, floorY, house)
 		end
 	end
 
@@ -438,13 +506,7 @@ local function buildCityHouse(center: Vector3, doorAxis: string, doorSign: numbe
 			door.CanCollide = true
 			setupSwingingDoor(door, "X", sign, center.Z - DOOR_WIDTH / 2, wallX)
 		else
-			newPart(
-				sign < 0 and "WestWall" or "EastWall",
-				Vector3.new(WALL_THICKNESS, WALL_HEIGHT, HOUSE_SIZE),
-				Vector3.new(wallX, wallY, center.Z),
-				WALL_COLOR,
-				house
-			)
+			buildWindowedWall(sign < 0 and "WestWall" or "EastWall", "Z", wallX, center.Z, HOUSE_SIZE, wallY, floorY, house)
 		end
 	end
 
