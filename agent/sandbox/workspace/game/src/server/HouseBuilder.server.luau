@@ -22,6 +22,13 @@ local TweenService = game:GetService("TweenService")
 -- becoming square. basePosition.Y is unchanged (0), and the floor is still
 -- sized/positioned so its bottom sits exactly on the baseplate top (Y=0,
 -- see default.project.json) -- nothing is built underground.
+--
+-- v6: per Slack request, this is the "main" house (as opposed to the many
+-- city houses in CityBuilder.server.luau) and gets TWO beds -- city houses
+-- get one each (see CityBuilder's own buildBed). Both beds are pushed flush
+-- against EastWall (the wall opposite the door, which is on WestWall) and
+-- spaced apart along Z, so neither blocks the doorway, the door's swing, or
+-- each other.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 28
@@ -39,6 +46,18 @@ local ROOF_THICKNESS = 2
 local ROOF_TRIM_HEIGHT = 1.2
 local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
+
+-- Bed (this house gets two -- see v6 note above)
+local BED_LENGTH = 6 -- head-to-foot
+local BED_WIDTH = 3
+local BED_ROW_OFFSET = 6 -- how far each of the two beds sits from center along Z
+local BED_FRAME_HEIGHT = 1
+local BED_MATTRESS_HEIGHT = 0.6
+local BED_PILLOW_HEIGHT = 0.3
+local BED_FRAME_COLOR = Color3.fromRGB(92, 64, 40)
+local BED_MATTRESS_COLOR = Color3.fromRGB(235, 235, 225)
+local BED_PILLOW_COLOR = Color3.fromRGB(250, 250, 250)
+local BED_BLANKET_COLOR = Color3.fromRGB(150, 40, 40)
 
 local function newPart(name: string, size: Vector3, position: Vector3, color: Color3, parent: Instance): Part
 	local part = Instance.new("Part")
@@ -98,6 +117,56 @@ local function setupSwingingDoor(door: Part, hingeX: number, hingeZ: number)
 
 		tweening = false
 	end)
+end
+
+-- Builds one simple boxy bed (frame + mattress + pillow + blanket) and
+-- parents it under `parent`. `x`/`z` is the bed's footprint center; `axis`
+-- is which world axis the bed's head-to-foot length runs along ("X" or
+-- "Z"), and `sign` (-1 or 1) is which end along that axis is the head
+-- (where the pillow goes -- callers push the head against a wall).
+local function buildBed(x: number, z: number, floorY: number, axis: string, sign: number, length: number, width: number, parent: Instance): Model
+	local bed = Instance.new("Model")
+	bed.Name = "Bed"
+
+	local frameSize = if axis == "Z" then Vector3.new(width, BED_FRAME_HEIGHT, length) else Vector3.new(length, BED_FRAME_HEIGHT, width)
+	local frameY = floorY + 0.5 + BED_FRAME_HEIGHT / 2
+	newPart("BedFrame", frameSize, Vector3.new(x, frameY, z), BED_FRAME_COLOR, bed)
+
+	local mattressSize = if axis == "Z"
+		then Vector3.new(width * 0.88, BED_MATTRESS_HEIGHT, length * 0.96)
+		else Vector3.new(length * 0.96, BED_MATTRESS_HEIGHT, width * 0.88)
+	local mattressY = frameY + BED_FRAME_HEIGHT / 2 + BED_MATTRESS_HEIGHT / 2
+	newPart("Mattress", mattressSize, Vector3.new(x, mattressY, z), BED_MATTRESS_COLOR, bed)
+
+	local pillowLength = math.min(length * 0.22, 1)
+	local headOffset = sign * (length / 2 - pillowLength / 2 - 0.1)
+	local pillowX = if axis == "Z" then x else x + headOffset
+	local pillowZ = if axis == "Z" then z + headOffset else z
+	local pillowSize = if axis == "Z" then Vector3.new(width * 0.65, BED_PILLOW_HEIGHT, pillowLength) else Vector3.new(pillowLength, BED_PILLOW_HEIGHT, width * 0.65)
+	newPart(
+		"Pillow",
+		pillowSize,
+		Vector3.new(pillowX, mattressY + BED_MATTRESS_HEIGHT / 2 + BED_PILLOW_HEIGHT / 2, pillowZ),
+		BED_PILLOW_COLOR,
+		bed
+	)
+
+	local blanketLength = length * 0.5
+	local footOffset = -sign * (length / 2 - blanketLength / 2 - 0.1)
+	local blanketX = if axis == "Z" then x else x + footOffset
+	local blanketZ = if axis == "Z" then z + footOffset else z
+	local blanketSize = if axis == "Z" then Vector3.new(width * 0.9, 0.15, blanketLength) else Vector3.new(blanketLength, 0.15, width * 0.9)
+	local blanket = newPart(
+		"Blanket",
+		blanketSize,
+		Vector3.new(blanketX, mattressY + BED_MATTRESS_HEIGHT / 2 + 0.08, blanketZ),
+		BED_BLANKET_COLOR,
+		bed
+	)
+	blanket.Material = Enum.Material.Fabric
+
+	bed.Parent = parent
+	return bed
 end
 
 local function buildHouse(basePosition: Vector3): Model
@@ -184,6 +253,13 @@ local function buildHouse(basePosition: Vector3): Model
 
 	local hingeZ = basePosition.Z - DOOR_WIDTH / 2
 	setupSwingingDoor(door, westX, hingeZ)
+
+	-- Two beds (v6): pushed flush against EastWall, the wall opposite the
+	-- door, and spaced apart along Z so they don't touch each other, the
+	-- North/South walls, or the door's swing.
+	local bedX = basePosition.X + (halfWidth - WALL_THICKNESS / 2 - BED_LENGTH / 2)
+	buildBed(bedX, basePosition.Z - BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
+	buildBed(bedX, basePosition.Z + BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
 
 	-- Flat overhanging roof: two stacked axis-aligned slabs, no rotation.
 	local roofY = wallTop + ROOF_THICKNESS / 2

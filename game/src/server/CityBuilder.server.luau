@@ -44,6 +44,12 @@ local TweenService = game:GetService("TweenService")
 -- simultaneous ProximityPrompts cheap, MaxActivationDistance is small (8
 -- studs, same as the starter house) so Roblox only activates prompts for
 -- doors actually near the local player; it does not scale with door count.
+--
+-- v6: per Slack request, every one of the 192 city houses now gets one bed
+-- (the separate starter house in HouseBuilder.server.luau gets two -- see
+-- that file's own buildBed/v6 note). Each bed is pushed flush against the
+-- wall opposite that house's door (using the same doorAxis/doorSign the
+-- house was built with) so it never blocks the doorway or the door's swing.
 
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
@@ -103,6 +109,17 @@ local DOOR_MAX_ACTIVATION_DISTANCE = 8 -- keeps 192 simultaneous prompts cheap; 
 local ROOF_OVERHANG = 1
 local ROOF_THICKNESS = 0.8
 local ROOF_TRIM_HEIGHT = 0.5
+
+-- Bed (one per city house, per v6 note above)
+local BED_LENGTH = 3 -- head-to-foot
+local BED_WIDTH = 2
+local BED_FRAME_HEIGHT = 0.7
+local BED_MATTRESS_HEIGHT = 0.4
+local BED_PILLOW_HEIGHT = 0.2
+local BED_FRAME_COLOR = Color3.fromRGB(92, 64, 40)
+local BED_MATTRESS_COLOR = Color3.fromRGB(235, 235, 225)
+local BED_PILLOW_COLOR = Color3.fromRGB(250, 250, 250)
+local BED_BLANKET_COLOR = Color3.fromRGB(150, 40, 40)
 
 -- Tree
 local TREE_TRUNK_HEIGHT = 4
@@ -185,6 +202,56 @@ local function setupSwingingDoor(door: Part, doorAxis: string, sign: number, hin
 
 		tweening = false
 	end)
+end
+
+-- Builds one simple boxy bed (frame + mattress + pillow + blanket) and
+-- parents it under `parent`. `x`/`z` is the bed's footprint center; `axis`
+-- is which world axis the bed's head-to-foot length runs along ("X" or
+-- "Z"), and `sign` (-1 or 1) is which end along that axis is the head
+-- (where the pillow goes -- callers push the head against a wall).
+local function buildBed(x: number, z: number, floorY: number, axis: string, sign: number, length: number, width: number, parent: Instance): Model
+	local bed = Instance.new("Model")
+	bed.Name = "Bed"
+
+	local frameSize = if axis == "Z" then Vector3.new(width, BED_FRAME_HEIGHT, length) else Vector3.new(length, BED_FRAME_HEIGHT, width)
+	local frameY = floorY + 0.5 + BED_FRAME_HEIGHT / 2
+	newPart("BedFrame", frameSize, Vector3.new(x, frameY, z), BED_FRAME_COLOR, bed)
+
+	local mattressSize = if axis == "Z"
+		then Vector3.new(width * 0.88, BED_MATTRESS_HEIGHT, length * 0.96)
+		else Vector3.new(length * 0.96, BED_MATTRESS_HEIGHT, width * 0.88)
+	local mattressY = frameY + BED_FRAME_HEIGHT / 2 + BED_MATTRESS_HEIGHT / 2
+	newPart("Mattress", mattressSize, Vector3.new(x, mattressY, z), BED_MATTRESS_COLOR, bed)
+
+	local pillowLength = math.min(length * 0.22, 1)
+	local headOffset = sign * (length / 2 - pillowLength / 2 - 0.1)
+	local pillowX = if axis == "Z" then x else x + headOffset
+	local pillowZ = if axis == "Z" then z + headOffset else z
+	local pillowSize = if axis == "Z" then Vector3.new(width * 0.65, BED_PILLOW_HEIGHT, pillowLength) else Vector3.new(pillowLength, BED_PILLOW_HEIGHT, width * 0.65)
+	newPart(
+		"Pillow",
+		pillowSize,
+		Vector3.new(pillowX, mattressY + BED_MATTRESS_HEIGHT / 2 + BED_PILLOW_HEIGHT / 2, pillowZ),
+		BED_PILLOW_COLOR,
+		bed
+	)
+
+	local blanketLength = length * 0.5
+	local footOffset = -sign * (length / 2 - blanketLength / 2 - 0.1)
+	local blanketX = if axis == "Z" then x else x + footOffset
+	local blanketZ = if axis == "Z" then z + footOffset else z
+	local blanketSize = if axis == "Z" then Vector3.new(width * 0.9, 0.15, blanketLength) else Vector3.new(blanketLength, 0.15, width * 0.9)
+	local blanket = newPart(
+		"Blanket",
+		blanketSize,
+		Vector3.new(blanketX, mattressY + BED_MATTRESS_HEIGHT / 2 + 0.08, blanketZ),
+		BED_BLANKET_COLOR,
+		bed
+	)
+	blanket.Material = Enum.Material.Fabric
+
+	bed.Parent = parent
+	return bed
 end
 
 -- A simple two-part tree: a vertical trunk and a ball of leaves on top.
@@ -337,6 +404,15 @@ local function buildCityHouse(center: Vector3, doorAxis: string, doorSign: numbe
 			)
 		end
 	end
+
+	-- One bed (v6): pushed flush against the wall opposite the door (using
+	-- the same doorAxis/doorSign this house's door was built with), so it
+	-- never blocks the doorway or the door's swing.
+	local bedSign = -doorSign
+	local bedOffset = bedSign * (half - WALL_THICKNESS / 2 - BED_LENGTH / 2)
+	local bedX = center.X + (doorAxis == "X" and bedOffset or 0)
+	local bedZ = center.Z + (doorAxis == "Z" and bedOffset or 0)
+	buildBed(bedX, bedZ, floorY, doorAxis, bedSign, BED_LENGTH, BED_WIDTH, house)
 
 	local roofY = wallTop + ROOF_THICKNESS / 2
 	newPart(
