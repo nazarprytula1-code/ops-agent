@@ -22,12 +22,17 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- (all within roughly X 6-52, Z -12..18) and well short of the city (which
 -- starts around Z=74).
 --
+-- v3: per Slack follow-up ("можеш ще трохи в право поліцкейський участок
+-- перенести"), moved further the same way -- another 30 studs in -Z --
+-- from (-40, 0, -50) to (-40, 0, -80), keeping the same "right" direction
+-- as v2 and still well clear of everything else on the baseplate.
+--
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
 -- of assuming the baseplate/terrain sits at a hardcoded Y.
 
-local POLICE_POSITION_XZ = Vector3.new(-40, 0, -50)
+local POLICE_POSITION_XZ = Vector3.new(-40, 0, -80)
 
 local WALL_HEIGHT = 32
 local WIDTH = 34 -- along X
