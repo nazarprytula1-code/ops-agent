@@ -60,6 +60,14 @@ local TweenService = game:GetService("TweenService")
 -- same bedX as the ground floor's two beds (flush against EastWall2),
 -- centered along Z. EastWall2's whole strip of Floor2 is west of the
 -- stairwell hole, so there's no overlap to worry about.
+--
+-- v11: per Slack request, all 3 beds in this house (the 2 on the ground
+-- floor, the 1 on Floor2) are bigger -- BED_LENGTH 6->6.5, BED_WIDTH 3->4.5.
+-- All 3 beds' placement formulas are relative to these constants, so they
+-- stay correctly positioned automatically. Checked clearances: the Floor2
+-- bed still has 1.5 studs of clearance from the stairwell hole (was 2 at
+-- the old size), and the ground floor beds still have 2.75 studs from the
+-- North/South walls and 7.5 studs between each other.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 28
@@ -79,8 +87,8 @@ local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
 
 -- Bed (this house gets two -- see v6 note above)
-local BED_LENGTH = 6 -- head-to-foot
-local BED_WIDTH = 3
+local BED_LENGTH = 6.5 -- head-to-foot
+local BED_WIDTH = 4.5
 local BED_ROW_OFFSET = 6 -- how far each of the two beds sits from center along Z
 local BED_FRAME_HEIGHT = 1
 local BED_MATTRESS_HEIGHT = 0.6
