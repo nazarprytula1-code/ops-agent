@@ -6,10 +6,11 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 
 -- Builds a small fire department station near Spawn on server start.
 --
--- Placement: FIRE_STATION_POSITION sits west of Spawn (X=0) and well clear
--- of the starter house (HouseBuilder.server.luau, at X=24) and the
--- procedural city (CityBuilder.server.luau, whose grid starts at Z=74) --
--- see the footprint math below. Ground Y is found via
+-- Placement: per Slack request, FIRE_STATION_POSITION was moved 150 studs
+-- right (+X) from its original spot west of Spawn, to X=108 -- east of
+-- Spawn (X=0) and the starter house (HouseBuilder.server.luau, at X=24),
+-- still clear of the procedural city (CityBuilder.server.luau, whose grid
+-- starts at Z=74). Ground Y is found via
 -- GroundUtils.findGroundY instead of assumed, per the "never hardcode
 -- ground Y" rule other builders in this repo already follow (TreeBuilder /
 -- CityBuilder): the live baseplate/terrain can differ from a hardcoded 0.
@@ -17,13 +18,14 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- Features:
 --  * Red/white station building with a rooftop sign ("FIRE DEPARTMENT" /
 --    "ПОЖЕЖНИЙ ВІДДІЛ") and a blinking rooftop beacon light.
---  * A large roll-up garage bay door on the wall facing Spawn (+X side).
+--  * A large roll-up garage bay door on the wall facing Spawn (the west
+--    wall, since the station now sits east of Spawn).
 --    ProximityPrompt (hold E) slides it straight up and disables its
 --    collision, instead of swinging like the other doors in this repo.
 --  * A normal pedestrian entrance door on the south wall, reusing the same
 --    hinge-swing pattern as HouseBuilder.server.luau / CityBuilder.server.luau.
 
-local FIRE_STATION_POSITION = Vector3.new(-42, 0, 6)
+local FIRE_STATION_POSITION = Vector3.new(108, 0, 6)
 
 local WIDTH = 34 -- X footprint
 local DEPTH = 26 -- Z footprint
@@ -160,14 +162,14 @@ local function setupSwingingDoor(door: Part, hingeX: number, hingeZ: number)
 	end)
 end
 
--- Rooftop sign facing +X (toward Spawn), bilingual per the Slack request.
+-- Rooftop sign facing -X (toward Spawn), bilingual per the Slack request.
 local function buildSign(center: Vector3, parent: Instance)
 	local board = newPart("SignBoard", Vector3.new(0.4, 4, GARAGE_DOOR_WIDTH), center, TRIM_WHITE, parent)
 	board.Material = Enum.Material.SmoothPlastic
 
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "SignGui"
-	gui.Face = Enum.NormalId.Right
+	gui.Face = Enum.NormalId.Left
 	gui.LightInfluence = 0
 	gui.PixelsPerStud = 36
 	gui.Parent = board
@@ -294,44 +296,45 @@ local function buildFireStation(basePosition: Vector3): Model
 	sideDoor.CanCollide = true
 	setupSwingingDoor(sideDoor, basePosition.X - SIDE_DOOR_WIDTH / 2, southZ)
 
-	-- West wall (-X side) is solid.
+	-- East wall (+X side) is solid.
 	newPart(
-		"WestWall",
+		"EastWall",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, DEPTH),
-		Vector3.new(basePosition.X - half, wallY, basePosition.Z),
+		Vector3.new(basePosition.X + half, wallY, basePosition.Z),
 		STATION_RED,
 		station
 	)
 
-	-- East wall (+X side, facing Spawn) has the garage bay.
-	local eastX = basePosition.X + half
+	-- West wall (-X side, facing Spawn now that the station sits east of it)
+	-- has the garage bay.
+	local westX = basePosition.X - half
 	local garageSideDepth = (DEPTH - GARAGE_DOOR_WIDTH) / 2
 	newPart(
-		"EastWallNear",
+		"WestWallNear",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, garageSideDepth),
-		Vector3.new(eastX, wallY, basePosition.Z - halfDepth + garageSideDepth / 2),
+		Vector3.new(westX, wallY, basePosition.Z - halfDepth + garageSideDepth / 2),
 		STATION_RED,
 		station
 	)
 	newPart(
-		"EastWallFar",
+		"WestWallFar",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, garageSideDepth),
-		Vector3.new(eastX, wallY, basePosition.Z + halfDepth - garageSideDepth / 2),
+		Vector3.new(westX, wallY, basePosition.Z + halfDepth - garageSideDepth / 2),
 		STATION_RED,
 		station
 	)
 	local garageLintelHeight = WALL_HEIGHT - GARAGE_DOOR_HEIGHT
 	newPart(
-		"EastWallLintel",
+		"WestWallLintel",
 		Vector3.new(WALL_THICKNESS, garageLintelHeight, GARAGE_DOOR_WIDTH),
-		Vector3.new(eastX, floorY + 0.5 + GARAGE_DOOR_HEIGHT + garageLintelHeight / 2, basePosition.Z),
+		Vector3.new(westX, floorY + 0.5 + GARAGE_DOOR_HEIGHT + garageLintelHeight / 2, basePosition.Z),
 		TRIM_WHITE,
 		station
 	)
 	local garageDoor = newPart(
 		"GarageDoor",
 		Vector3.new(WALL_THICKNESS, GARAGE_DOOR_HEIGHT, GARAGE_DOOR_WIDTH),
-		Vector3.new(eastX, floorY + 0.5 + GARAGE_DOOR_HEIGHT / 2, basePosition.Z),
+		Vector3.new(westX, floorY + 0.5 + GARAGE_DOOR_HEIGHT / 2, basePosition.Z),
 		TRIM_WHITE,
 		station
 	)
@@ -340,7 +343,7 @@ local function buildFireStation(basePosition: Vector3): Model
 	setupGarageDoor(garageDoor, GARAGE_DOOR_HEIGHT)
 
 	buildSign(
-		Vector3.new(eastX + 0.3, floorY + 0.5 + GARAGE_DOOR_HEIGHT + garageLintelHeight / 2, basePosition.Z),
+		Vector3.new(westX - 0.3, floorY + 0.5 + GARAGE_DOOR_HEIGHT + garageLintelHeight / 2, basePosition.Z),
 		station
 	)
 
