@@ -55,6 +55,11 @@ local TweenService = game:GetService("TweenService")
 -- Floor2 ceiling). Floor2 is now built from 4 strips that leave a
 -- stairwell-shaped hole with headroom the whole way up. See the v9 note by
 -- the Floor2 construction in buildHouse for the exact geometry.
+--
+-- v10: per Slack request, the second floor now has a bed too -- reuses the
+-- same bedX as the ground floor's two beds (flush against EastWall2),
+-- centered along Z. EastWall2's whole strip of Floor2 is west of the
+-- stairwell hole, so there's no overlap to worry about.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 28
@@ -413,6 +418,12 @@ local function buildHouse(basePosition: Vector3): Model
 	buildWindowedWall("SouthWall2", "X", basePosition.Z + halfDepth, basePosition.X, WIDTH, wallY2, floorY2, house)
 	buildWindowedWall("EastWall2", "Z", basePosition.X + halfWidth, basePosition.Z, DEPTH, wallY2, floorY2, house)
 	buildWindowedWall("WestWall2", "Z", basePosition.X - halfWidth, basePosition.Z, DEPTH, wallY2, floorY2, house)
+
+	-- One bed on the second floor (v10, per Slack). Reuses the same bedX as
+	-- the ground floor's beds (flush against EastWall2), centered along Z --
+	-- the stairwell hole is confined to X [holeXMin, holeXMax], well west of
+	-- EastWall2, so this whole strip of Floor2 is solid and clear of it.
+	buildBed(bedX, basePosition.Z, floorY2, "X", 1, BED_LENGTH, BED_WIDTH, house)
 
 	-- Staircase (v8): STAIR_STEP_COUNT solid blocks, each one step taller
 	-- than the last -- a classic blocky staircase, no ramps or rotation.
