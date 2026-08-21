@@ -37,6 +37,15 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- sign position) is derived from DOOR_WIDTH/DOOR_HEIGHT, so it resizes
 -- automatically with no other constants to touch.
 --
+-- v6: per Slack request ("зроби тепер вікна в поліцейському участку"),
+-- added windows: a recessed navy frame plus a semi-transparent glass pane
+-- (see addWindow), inset into the North/South/West solid walls (2 each)
+-- and both East-wall door-flanking segments (1 each). Each window's frame
+-- and glass are sized *thicker* than the wall along the wall's normal axis
+-- (WALL_THICKNESS + a small margin) and centered on the same coordinate as
+-- the wall itself, so they read as glazing set into the wall without any
+-- z-fighting and without needing to cut an actual hole in the wall parts.
+--
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
@@ -60,6 +69,14 @@ local DOOR_HEIGHT = 9
 local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
 local TRIM_BAND_HEIGHT = 3
+
+local WINDOW_WIDTH = 5
+local WINDOW_HEIGHT = 6
+local WINDOW_FRAME_BORDER = 0.6 -- how much frame shows around the glass on each side
+local WINDOW_NORMAL_MARGIN = 0.6 -- how much thicker than the wall the frame is, along the wall's normal axis
+local WINDOW_GLASS_NORMAL_MARGIN = 0.8 -- glass is slightly thicker still, so it renders in front of the frame with no z-fighting
+local WINDOW_GLASS_COLOR = Color3.fromRGB(150, 205, 230)
+local WINDOW_GLASS_TRANSPARENCY = 0.55
 
 local LIGHT_FLASH_SECONDS = 0.4
 local RED_LIGHT_COLOR = Color3.fromRGB(255, 40, 40)
@@ -196,6 +213,37 @@ local function addSignAndLights(basePosition: Vector3, floorY: number, eastX: nu
 	end)
 end
 
+-- Inset window: a navy frame plus a semi-transparent glass pane, centered
+-- on the same normal-axis coordinate as the wall it sits in (see v6 note
+-- above for why this avoids z-fighting without cutting a hole).
+-- `axis` is the wall's normal axis ("Z" for the North/South walls, whose
+-- plane is a fixed Z; "X" for the West/East walls, whose plane is a fixed
+-- X). `wallCoord` is that fixed coordinate, `alongCoord` is where the
+-- window sits along the wall's length, and `y` is its vertical center.
+local function addWindow(axis: string, wallCoord: number, alongCoord: number, y: number, parent: Instance, name: string)
+	local glassWidth = WINDOW_WIDTH - WINDOW_FRAME_BORDER * 2
+	local glassHeight = WINDOW_HEIGHT - WINDOW_FRAME_BORDER * 2
+
+	local frameSize: Vector3
+	local glassSize: Vector3
+	local position: Vector3
+	if axis == "Z" then
+		frameSize = Vector3.new(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS + WINDOW_NORMAL_MARGIN)
+		glassSize = Vector3.new(glassWidth, glassHeight, WALL_THICKNESS + WINDOW_GLASS_NORMAL_MARGIN)
+		position = Vector3.new(alongCoord, y, wallCoord)
+	else
+		frameSize = Vector3.new(WALL_THICKNESS + WINDOW_NORMAL_MARGIN, WINDOW_HEIGHT, WINDOW_WIDTH)
+		glassSize = Vector3.new(WALL_THICKNESS + WINDOW_GLASS_NORMAL_MARGIN, glassHeight, glassWidth)
+		position = Vector3.new(wallCoord, y, alongCoord)
+	end
+
+	newPart(name .. "Frame", frameSize, position, TRIM_COLOR, parent)
+	local glass = newPart(name .. "Glass", glassSize, position, WINDOW_GLASS_COLOR, parent)
+	glass.Material = Enum.Material.Glass
+	glass.Transparency = WINDOW_GLASS_TRANSPARENCY
+	glass.CanCollide = false
+end
+
 local function buildPoliceDepartment(basePosition: Vector3): Model
 	local station = Instance.new("Model")
 	station.Name = "PoliceDepartment"
@@ -213,6 +261,9 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 	local wallY = floorY + 0.5 + WALL_HEIGHT / 2
 	local halfWidth = WIDTH / 2
 	local halfDepth = DEPTH / 2
+	-- Above the base trim band, below the roofline -- a natural window band.
+	local windowY = floorY + 0.5 + WALL_HEIGHT * 0.62
+	local windowAlongOffset = 9 -- how far each North/South window sits from the building's X center
 
 	-- North, South and West walls are solid, with a navy trim band near the
 	-- base for a "municipal building" look.
@@ -232,16 +283,24 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 		Vector3.new(WIDTH, WALL_HEIGHT, WALL_THICKNESS),
 		Vector3.new(basePosition.X, wallY, basePosition.Z - halfDepth)
 	)
+	addWindow("Z", basePosition.Z - halfDepth, basePosition.X - windowAlongOffset, windowY, station, "NorthWindowWest")
+	addWindow("Z", basePosition.Z - halfDepth, basePosition.X + windowAlongOffset, windowY, station, "NorthWindowEast")
+
 	solidWallWithTrim(
 		"SouthWall",
 		Vector3.new(WIDTH, WALL_HEIGHT, WALL_THICKNESS),
 		Vector3.new(basePosition.X, wallY, basePosition.Z + halfDepth)
 	)
+	addWindow("Z", basePosition.Z + halfDepth, basePosition.X - windowAlongOffset, windowY, station, "SouthWindowWest")
+	addWindow("Z", basePosition.Z + halfDepth, basePosition.X + windowAlongOffset, windowY, station, "SouthWindowEast")
+
 	solidWallWithTrim(
 		"WestWall",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, DEPTH),
 		Vector3.new(basePosition.X - halfWidth, wallY, basePosition.Z)
 	)
+	addWindow("X", basePosition.X - halfWidth, basePosition.Z - 7, windowY, station, "WestWindowNorth")
+	addWindow("X", basePosition.X - halfWidth, basePosition.Z + 7, windowY, station, "WestWindowSouth")
 
 	-- East wall faces Spawn (Spawn is at world X=0, the station is at
 	-- X=-40, so walking straight there reaches the +X wall first). It has
@@ -256,6 +315,7 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 		WALL_COLOR,
 		station
 	)
+	addWindow("X", eastX, basePosition.Z - halfDepth + sideSegmentDepth / 2, windowY, station, "EastWindowNear")
 	newPart(
 		"EastWallFar",
 		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSegmentDepth),
@@ -263,6 +323,7 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 		WALL_COLOR,
 		station
 	)
+	addWindow("X", eastX, basePosition.Z + halfDepth - sideSegmentDepth / 2, windowY, station, "EastWindowFar")
 	local lintelHeight = WALL_HEIGHT - DOOR_HEIGHT
 	newPart(
 		"EastWallLintel",
