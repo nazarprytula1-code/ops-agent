@@ -76,7 +76,7 @@ local ROOF_TRIM_HEIGHT = 1.2
 -- comfortable 2-stud tread, and STAIR_RUN follows from that instead of
 -- being picked independently.
 local SLAB_THICKNESS = 1
-local STAIR_WIDTH = 6 -- along X
+local STAIR_WIDTH = 9 -- along X -- wide enough that the 3rd-person camera has room and doesn't clip into nearby walls
 local STAIR_STEP_RISE = 1 -- studs per step -- low enough to walk up without jumping
 local STAIR_STEP_DEPTH = 2 -- studs per step (tread depth)
 local STAIR_STEP_COUNT = FLOOR_HEIGHT / STAIR_STEP_RISE -- FLOOR_HEIGHT must be a multiple of STAIR_STEP_RISE
@@ -84,6 +84,9 @@ local STAIR_RUN = STAIR_STEP_COUNT * STAIR_STEP_DEPTH -- along Z
 local STAIR_MARGIN_FROM_WALL = 3 -- gap between the North wall's inner face and the first step
 local RAIL_HEIGHT = 3.5
 local RAIL_THICKNESS = 0.5
+local STAIR_LIGHT_COLOR = Color3.fromRGB(255, 244, 214)
+local STAIR_LIGHT_RANGE = 26
+local STAIR_LIGHT_BRIGHTNESS = 2
 
 local function newPart(name: string, size: Vector3, position: Vector3, color: Color3, parent: Instance): Part
 	local part = Instance.new("Part")
@@ -312,6 +315,28 @@ local function addStairRails(
 	)
 end
 
+-- A small ceiling-mounted light fixture (Neon cylinder + PointLight) so the
+-- stairwell shaft isn't pitch dark -- it has no windows of its own, and the
+-- exterior wall windows don't reach the center of the building.
+local function addStairLight(house: Instance, x: number, y: number, z: number)
+	local fixture = Instance.new("Part")
+	fixture.Name = "StairLightFixture"
+	fixture.Anchored = true
+	fixture.CanCollide = false
+	fixture.Shape = Enum.PartType.Cylinder
+	fixture.Size = Vector3.new(0.3, 1.4, 1.4)
+	fixture.CFrame = CFrame.new(x, y, z) * CFrame.Angles(0, 0, math.rad(90))
+	fixture.Color = STAIR_LIGHT_COLOR
+	fixture.Material = Enum.Material.Neon
+	fixture.Parent = house
+
+	local light = Instance.new("PointLight")
+	light.Color = STAIR_LIGHT_COLOR
+	light.Range = STAIR_LIGHT_RANGE
+	light.Brightness = STAIR_LIGHT_BRIGHTNESS
+	light.Parent = fixture
+end
+
 -- groundY is the real top-of-ground surface (from GroundUtils.findGroundY),
 -- not a hardcoded Y.
 local function buildHotel(center: Vector3, groundY: number): Model
@@ -430,6 +455,10 @@ local function buildHotel(center: Vector3, groundY: number): Model
 			buildSlabWithHole(hotel, "Slab" .. floor, center, slabCenterY, stairXMin, stairXMax, stairZMin, stairZMax)
 			buildStairs(hotel, center.X, stairZMin, stairZMax, floorBottomY)
 			addStairRails(hotel, stairXMin, stairXMax, stairZMin, stairZMax, slabTopY)
+
+			local lightY = slabTopY - 1 -- just under the ceiling of this flight
+			addStairLight(hotel, center.X, lightY, stairZMin + STAIR_RUN * 0.25)
+			addStairLight(hotel, center.X, lightY, stairZMin + STAIR_RUN * 0.75)
 		end
 	end
 
