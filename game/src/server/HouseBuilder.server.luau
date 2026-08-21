@@ -29,6 +29,13 @@ local TweenService = game:GetService("TweenService")
 -- against EastWall (the wall opposite the door, which is on WestWall) and
 -- spaced apart along Z, so neither blocks the doorway, the door's swing, or
 -- each other.
+--
+-- v7: per Slack request, every solid wall (North, South, East -- WestWall
+-- already has the door) now gets a real see-through window: each wall is
+-- split into left/right segments plus a sill below and a lintel above (same
+-- idea as the door's Near/Far/Lintel segments), with a Glass part filling
+-- the resulting hole so you can actually see through it, not just a painted
+-- square. See buildWindowedWall.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 28
@@ -58,6 +65,13 @@ local BED_FRAME_COLOR = Color3.fromRGB(92, 64, 40)
 local BED_MATTRESS_COLOR = Color3.fromRGB(235, 235, 225)
 local BED_PILLOW_COLOR = Color3.fromRGB(250, 250, 250)
 local BED_BLANKET_COLOR = Color3.fromRGB(150, 40, 40)
+
+-- Window (one per solid wall -- North, South, East -- see v7 note above)
+local WINDOW_WIDTH = 6
+local WINDOW_HEIGHT = 8
+local WINDOW_SILL_HEIGHT = 10 -- floor-to-sill; lintel above is WALL_HEIGHT - this - WINDOW_HEIGHT
+local WINDOW_COLOR = Color3.fromRGB(190, 230, 255)
+local WINDOW_TRANSPARENCY = 0.55
 
 local function newPart(name: string, size: Vector3, position: Vector3, color: Color3, parent: Instance): Part
 	local part = Instance.new("Part")
@@ -169,6 +183,64 @@ local function buildBed(x: number, z: number, floorY: number, axis: string, sign
 	return bed
 end
 
+-- Builds a solid wall with a real see-through window cut into its middle:
+-- two side segments, a sill below the window, a lintel above it, and a
+-- Glass part filling the gap (mirrors how the door's Near/Far/Lintel
+-- segments work, just with a Sill added and no ProximityPrompt). `axis` is
+-- which world axis the wall's *length* runs along ("X" for North/South
+-- walls, "Z" for East/West walls); `normalCoord` is the wall's fixed
+-- coordinate on the other axis; `alongCenter` is the wall's center and
+-- `wallLength` its length along `axis`.
+local function buildWindowedWall(name: string, axis: string, normalCoord: number, alongCenter: number, wallLength: number, wallY: number, floorY: number, parent: Instance)
+	local sideSpan = (wallLength - WINDOW_WIDTH) / 2
+	local lintelHeight = WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEIGHT
+	local sillY = floorY + 0.5 + WINDOW_SILL_HEIGHT / 2
+	local windowY = floorY + 0.5 + WINDOW_SILL_HEIGHT + WINDOW_HEIGHT / 2
+	local lintelY = floorY + 0.5 + WINDOW_SILL_HEIGHT + WINDOW_HEIGHT + lintelHeight / 2
+
+	local glass: Part
+	if axis == "X" then
+		newPart(
+			name .. "Left",
+			Vector3.new(sideSpan, WALL_HEIGHT, WALL_THICKNESS),
+			Vector3.new(alongCenter - wallLength / 2 + sideSpan / 2, wallY, normalCoord),
+			WALL_COLOR,
+			parent
+		)
+		newPart(
+			name .. "Right",
+			Vector3.new(sideSpan, WALL_HEIGHT, WALL_THICKNESS),
+			Vector3.new(alongCenter + wallLength / 2 - sideSpan / 2, wallY, normalCoord),
+			WALL_COLOR,
+			parent
+		)
+		newPart(name .. "Sill", Vector3.new(WINDOW_WIDTH, WINDOW_SILL_HEIGHT, WALL_THICKNESS), Vector3.new(alongCenter, sillY, normalCoord), WALL_COLOR, parent)
+		newPart(name .. "Lintel", Vector3.new(WINDOW_WIDTH, lintelHeight, WALL_THICKNESS), Vector3.new(alongCenter, lintelY, normalCoord), WALL_COLOR, parent)
+		glass = newPart(name .. "Window", Vector3.new(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS), Vector3.new(alongCenter, windowY, normalCoord), WINDOW_COLOR, parent)
+	else
+		newPart(
+			name .. "Near",
+			Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSpan),
+			Vector3.new(normalCoord, wallY, alongCenter - wallLength / 2 + sideSpan / 2),
+			WALL_COLOR,
+			parent
+		)
+		newPart(
+			name .. "Far",
+			Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSpan),
+			Vector3.new(normalCoord, wallY, alongCenter + wallLength / 2 - sideSpan / 2),
+			WALL_COLOR,
+			parent
+		)
+		newPart(name .. "Sill", Vector3.new(WALL_THICKNESS, WINDOW_SILL_HEIGHT, WINDOW_WIDTH), Vector3.new(normalCoord, sillY, alongCenter), WALL_COLOR, parent)
+		newPart(name .. "Lintel", Vector3.new(WALL_THICKNESS, lintelHeight, WINDOW_WIDTH), Vector3.new(normalCoord, lintelY, alongCenter), WALL_COLOR, parent)
+		glass = newPart(name .. "Window", Vector3.new(WALL_THICKNESS, WINDOW_HEIGHT, WINDOW_WIDTH), Vector3.new(normalCoord, windowY, alongCenter), WINDOW_COLOR, parent)
+	end
+
+	glass.Material = Enum.Material.Glass
+	glass.Transparency = WINDOW_TRANSPARENCY
+end
+
 local function buildHouse(basePosition: Vector3): Model
 	local house = Instance.new("Model")
 	house.Name = "House"
@@ -187,28 +259,10 @@ local function buildHouse(basePosition: Vector3): Model
 	local halfWidth = WIDTH / 2
 	local halfDepth = DEPTH / 2
 
-	-- North, South and East walls are solid.
-	newPart(
-		"NorthWall",
-		Vector3.new(WIDTH, WALL_HEIGHT, WALL_THICKNESS),
-		Vector3.new(basePosition.X, wallY, basePosition.Z - halfDepth),
-		WALL_COLOR,
-		house
-	)
-	newPart(
-		"SouthWall",
-		Vector3.new(WIDTH, WALL_HEIGHT, WALL_THICKNESS),
-		Vector3.new(basePosition.X, wallY, basePosition.Z + halfDepth),
-		WALL_COLOR,
-		house
-	)
-	newPart(
-		"EastWall",
-		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, DEPTH),
-		Vector3.new(basePosition.X + halfWidth, wallY, basePosition.Z),
-		WALL_COLOR,
-		house
-	)
+	-- North, South and East walls are solid, each with a window (v7).
+	buildWindowedWall("NorthWall", "X", basePosition.Z - halfDepth, basePosition.X, WIDTH, wallY, floorY, house)
+	buildWindowedWall("SouthWall", "X", basePosition.Z + halfDepth, basePosition.X, WIDTH, wallY, floorY, house)
+	buildWindowedWall("EastWall", "Z", basePosition.X + halfWidth, basePosition.Z, DEPTH, wallY, floorY, house)
 
 	-- West wall faces Spawn (Spawn is at world X=0, this house is at X=24,
 	-- so walking straight from Spawn reaches the -X wall first). It has the
