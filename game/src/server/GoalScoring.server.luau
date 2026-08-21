@@ -4,6 +4,7 @@ local RunService = game:GetService("RunService")
 
 local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 local FootballConfig = require(ReplicatedStorage.Shared.FootballConfig)
+local BallDribble = require(ReplicatedStorage.Shared.BallDribble)
 
 -- Watches the ball built by BallBuilder.server.luau and, per Slack request,
 -- counts a goal for the right team as soon as it reaches the net inside
@@ -101,6 +102,13 @@ local function onGoal(scoringTeam: "A" | "B")
 		scoreB += 1
 	end
 	updateScoreText()
+
+	-- If someone dribbled the ball in, end that first -- otherwise its
+	-- per-frame follow loop (see BallKick.server.luau) would keep overriding
+	-- the position/Anchored state this sets below.
+	if BallDribble.isDribbling() then
+		BallDribble.stop(ball)
+	end
 
 	-- Freeze and hide the ball immediately so it isn't still sitting in the
 	-- net (or getting shoved around by it) during the respawn delay.
