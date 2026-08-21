@@ -23,51 +23,10 @@ local TweenService = game:GetService("TweenService")
 -- sized/positioned so its bottom sits exactly on the baseplate top (Y=0,
 -- see default.project.json) -- nothing is built underground.
 --
--- v6: per Slack request, this is the "main" house (as opposed to the many
--- city houses in CityBuilder.server.luau) and gets TWO beds -- city houses
--- get one each (see CityBuilder's own buildBed). Both beds are pushed flush
--- against EastWall (the wall opposite the door, which is on WestWall) and
--- spaced apart along Z, so neither blocks the doorway, the door's swing, or
--- each other.
---
--- v7: per Slack request, every solid wall (North, South, East -- WestWall
--- already has the door) now gets a real see-through window: each wall is
--- split into left/right segments plus a sill below and a lintel above (same
--- idea as the door's Near/Far/Lintel segments), with a Glass part filling
--- the resulting hole so you can actually see through it, not just a painted
--- square. See buildWindowedWall.
---
--- v8: per Slack request, this house now has a second floor. Floor2 sits
--- directly on top of the first floor's walls (its bottom = the first
--- floor's wallTop) and is a windowed box just like the first floor (all 4
--- sides this time, since there's no need for a second front door -- you
--- reach it via the Stairs). The roof moves up to sit on the SECOND floor's
--- walls instead of the first floor's. A blocky staircase (StairN parts,
--- each one step taller than the last -- no ramps/rotation, matching this
--- file's existing no-rotation style) climbs the gap between the two
--- floors, tucked against NorthWall and centered in X so it stays clear of
--- both the door (WestWall) and the beds (against EastWall).
---
--- v9: Floor2 used to be one solid slab covering the entire footprint,
--- including directly above the staircase, so climbing players hit their
--- head on it and got stuck a few steps from the top (the "поремонтуй"
--- report from Slack, screenshot showed a player wedged looking up at the
--- Floor2 ceiling). Floor2 is now built from 4 strips that leave a
--- stairwell-shaped hole with headroom the whole way up. See the v9 note by
--- the Floor2 construction in buildHouse for the exact geometry.
---
--- v10: per Slack request, the second floor now has a bed too -- reuses the
--- same bedX as the ground floor's two beds (flush against EastWall2),
--- centered along Z. EastWall2's whole strip of Floor2 is west of the
--- stairwell hole, so there's no overlap to worry about.
---
--- v11: per Slack request, all 3 beds in this house (the 2 on the ground
--- floor, the 1 on Floor2) are bigger -- BED_LENGTH 6->6.5, BED_WIDTH 3->4.5.
--- All 3 beds' placement formulas are relative to these constants, so they
--- stay correctly positioned automatically. Checked clearances: the Floor2
--- bed still has 1.5 studs of clearance from the stairwell hole (was 2 at
--- the old size), and the ground floor beds still have 2.75 studs from the
--- North/South walls and 7.5 studs between each other.
+-- v6: added a sittable toilet on the first floor (the only floor -- this is
+-- a single-story house) per Slack request. It's a bowl + tank built from
+-- parts, plus a real Roblox `Seat` on top so clicking/pressing the seat
+-- prompt sits the player down, same as any other seat in the game.
 
 local HOUSE_POSITION = Vector3.new(24, 0, 0)
 local WALL_HEIGHT = 28
@@ -86,31 +45,17 @@ local ROOF_TRIM_HEIGHT = 1.2
 local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
 
--- Bed (this house gets two -- see v6 note above)
-local BED_LENGTH = 6.5 -- head-to-foot
-local BED_WIDTH = 4.5
-local BED_ROW_OFFSET = 6 -- how far each of the two beds sits from center along Z
-local BED_FRAME_HEIGHT = 1
-local BED_MATTRESS_HEIGHT = 0.6
-local BED_PILLOW_HEIGHT = 0.3
-local BED_FRAME_COLOR = Color3.fromRGB(92, 64, 40)
-local BED_MATTRESS_COLOR = Color3.fromRGB(235, 235, 225)
-local BED_PILLOW_COLOR = Color3.fromRGB(250, 250, 250)
-local BED_BLANKET_COLOR = Color3.fromRGB(150, 40, 40)
-
--- Window (one per solid wall -- North, South, East -- see v7 note above)
-local WINDOW_WIDTH = 6
-local WINDOW_HEIGHT = 8
-local WINDOW_SILL_HEIGHT = 10 -- floor-to-sill; lintel above is WALL_HEIGHT - this - WINDOW_HEIGHT
-local WINDOW_COLOR = Color3.fromRGB(190, 230, 255)
-local WINDOW_TRANSPARENCY = 0.55
-
--- Floor slabs + staircase (v8 note above)
-local FLOOR_THICKNESS = 1
-local STAIR_STEP_COUNT = 15 -- how many blocky steps climb from floor 1 to floor 2
-local STAIR_STEP_DEPTH = 1.2 -- how far each step advances along Z
-local STAIR_WIDTH = 4
-local STAIR_COLOR = Color3.fromRGB(130, 95, 60)
+-- Toilet (bowl + tank + sittable seat), tucked in the NorthWall/EastWall
+-- corner, away from the door path.
+local TOILET_MARGIN = 3 -- gap from the two walls it's tucked into
+local TOILET_BOWL_WIDTH = 4
+local TOILET_BOWL_DEPTH = 5
+local TOILET_BOWL_HEIGHT = 3
+local TOILET_SEAT_HEIGHT = 0.6
+local TOILET_TANK_WIDTH = 4
+local TOILET_TANK_DEPTH = 1.2
+local TOILET_TANK_HEIGHT = 4
+local TOILET_COLOR = Color3.fromRGB(250, 250, 250)
 
 local function newPart(name: string, size: Vector3, position: Vector3, color: Color3, parent: Instance): Part
 	local part = Instance.new("Part")
@@ -172,112 +117,45 @@ local function setupSwingingDoor(door: Part, hingeX: number, hingeZ: number)
 	end)
 end
 
--- Builds one simple boxy bed (frame + mattress + pillow + blanket) and
--- parents it under `parent`. `x`/`z` is the bed's footprint center; `axis`
--- is which world axis the bed's head-to-foot length runs along ("X" or
--- "Z"), and `sign` (-1 or 1) is which end along that axis is the head
--- (where the pillow goes -- callers push the head against a wall).
-local function buildBed(x: number, z: number, floorY: number, axis: string, sign: number, length: number, width: number, parent: Instance): Model
-	local bed = Instance.new("Model")
-	bed.Name = "Bed"
+-- Builds a small sittable toilet (bowl + tank + Seat) whose bowl bottom
+-- sits on `floorY` (the same floor-top Y used for the house floor), tucked
+-- into the NorthWall/EastWall corner.
+local function buildToilet(basePosition: Vector3, floorY: number, halfWidth: number, halfDepth: number, parent: Instance)
+	local toiletX = basePosition.X + halfWidth - TOILET_MARGIN - TOILET_BOWL_WIDTH / 2
+	local toiletZ = basePosition.Z - halfDepth + TOILET_MARGIN + TOILET_BOWL_DEPTH / 2
 
-	local frameSize = if axis == "Z" then Vector3.new(width, BED_FRAME_HEIGHT, length) else Vector3.new(length, BED_FRAME_HEIGHT, width)
-	local frameY = floorY + 0.5 + BED_FRAME_HEIGHT / 2
-	newPart("BedFrame", frameSize, Vector3.new(x, frameY, z), BED_FRAME_COLOR, bed)
-
-	local mattressSize = if axis == "Z"
-		then Vector3.new(width * 0.88, BED_MATTRESS_HEIGHT, length * 0.96)
-		else Vector3.new(length * 0.96, BED_MATTRESS_HEIGHT, width * 0.88)
-	local mattressY = frameY + BED_FRAME_HEIGHT / 2 + BED_MATTRESS_HEIGHT / 2
-	newPart("Mattress", mattressSize, Vector3.new(x, mattressY, z), BED_MATTRESS_COLOR, bed)
-
-	local pillowLength = math.min(length * 0.22, 1)
-	local headOffset = sign * (length / 2 - pillowLength / 2 - 0.1)
-	local pillowX = if axis == "Z" then x else x + headOffset
-	local pillowZ = if axis == "Z" then z + headOffset else z
-	local pillowSize = if axis == "Z" then Vector3.new(width * 0.65, BED_PILLOW_HEIGHT, pillowLength) else Vector3.new(pillowLength, BED_PILLOW_HEIGHT, width * 0.65)
-	newPart(
-		"Pillow",
-		pillowSize,
-		Vector3.new(pillowX, mattressY + BED_MATTRESS_HEIGHT / 2 + BED_PILLOW_HEIGHT / 2, pillowZ),
-		BED_PILLOW_COLOR,
-		bed
+	local bowlY = floorY + 0.5 + TOILET_BOWL_HEIGHT / 2
+	local bowl = newPart(
+		"ToiletBowl",
+		Vector3.new(TOILET_BOWL_WIDTH, TOILET_BOWL_HEIGHT, TOILET_BOWL_DEPTH),
+		Vector3.new(toiletX, bowlY, toiletZ),
+		TOILET_COLOR,
+		parent
 	)
+	bowl.Material = Enum.Material.SmoothPlastic
 
-	local blanketLength = length * 0.5
-	local footOffset = -sign * (length / 2 - blanketLength / 2 - 0.1)
-	local blanketX = if axis == "Z" then x else x + footOffset
-	local blanketZ = if axis == "Z" then z + footOffset else z
-	local blanketSize = if axis == "Z" then Vector3.new(width * 0.9, 0.15, blanketLength) else Vector3.new(blanketLength, 0.15, width * 0.9)
-	local blanket = newPart(
-		"Blanket",
-		blanketSize,
-		Vector3.new(blanketX, mattressY + BED_MATTRESS_HEIGHT / 2 + 0.08, blanketZ),
-		BED_BLANKET_COLOR,
-		bed
+	-- Tank sits against the NorthWall, behind the bowl.
+	local tankY = floorY + 0.5 + TOILET_TANK_HEIGHT / 2
+	local tankZ = toiletZ - TOILET_BOWL_DEPTH / 2 + TOILET_TANK_DEPTH / 2
+	local tank = newPart(
+		"ToiletTank",
+		Vector3.new(TOILET_TANK_WIDTH, TOILET_TANK_HEIGHT, TOILET_TANK_DEPTH),
+		Vector3.new(toiletX, tankY, tankZ),
+		TOILET_COLOR,
+		parent
 	)
-	blanket.Material = Enum.Material.Fabric
+	tank.Material = Enum.Material.SmoothPlastic
 
-	bed.Parent = parent
-	return bed
-end
-
--- Builds a solid wall with a real see-through window cut into its middle:
--- two side segments, a sill below the window, a lintel above it, and a
--- Glass part filling the gap (mirrors how the door's Near/Far/Lintel
--- segments work, just with a Sill added and no ProximityPrompt). `axis` is
--- which world axis the wall's *length* runs along ("X" for North/South
--- walls, "Z" for East/West walls); `normalCoord` is the wall's fixed
--- coordinate on the other axis; `alongCenter` is the wall's center and
--- `wallLength` its length along `axis`.
-local function buildWindowedWall(name: string, axis: string, normalCoord: number, alongCenter: number, wallLength: number, wallY: number, floorY: number, parent: Instance)
-	local sideSpan = (wallLength - WINDOW_WIDTH) / 2
-	local lintelHeight = WALL_HEIGHT - WINDOW_SILL_HEIGHT - WINDOW_HEIGHT
-	local sillY = floorY + 0.5 + WINDOW_SILL_HEIGHT / 2
-	local windowY = floorY + 0.5 + WINDOW_SILL_HEIGHT + WINDOW_HEIGHT / 2
-	local lintelY = floorY + 0.5 + WINDOW_SILL_HEIGHT + WINDOW_HEIGHT + lintelHeight / 2
-
-	local glass: Part
-	if axis == "X" then
-		newPart(
-			name .. "Left",
-			Vector3.new(sideSpan, WALL_HEIGHT, WALL_THICKNESS),
-			Vector3.new(alongCenter - wallLength / 2 + sideSpan / 2, wallY, normalCoord),
-			WALL_COLOR,
-			parent
-		)
-		newPart(
-			name .. "Right",
-			Vector3.new(sideSpan, WALL_HEIGHT, WALL_THICKNESS),
-			Vector3.new(alongCenter + wallLength / 2 - sideSpan / 2, wallY, normalCoord),
-			WALL_COLOR,
-			parent
-		)
-		newPart(name .. "Sill", Vector3.new(WINDOW_WIDTH, WINDOW_SILL_HEIGHT, WALL_THICKNESS), Vector3.new(alongCenter, sillY, normalCoord), WALL_COLOR, parent)
-		newPart(name .. "Lintel", Vector3.new(WINDOW_WIDTH, lintelHeight, WALL_THICKNESS), Vector3.new(alongCenter, lintelY, normalCoord), WALL_COLOR, parent)
-		glass = newPart(name .. "Window", Vector3.new(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS), Vector3.new(alongCenter, windowY, normalCoord), WINDOW_COLOR, parent)
-	else
-		newPart(
-			name .. "Near",
-			Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSpan),
-			Vector3.new(normalCoord, wallY, alongCenter - wallLength / 2 + sideSpan / 2),
-			WALL_COLOR,
-			parent
-		)
-		newPart(
-			name .. "Far",
-			Vector3.new(WALL_THICKNESS, WALL_HEIGHT, sideSpan),
-			Vector3.new(normalCoord, wallY, alongCenter + wallLength / 2 - sideSpan / 2),
-			WALL_COLOR,
-			parent
-		)
-		newPart(name .. "Sill", Vector3.new(WALL_THICKNESS, WINDOW_SILL_HEIGHT, WINDOW_WIDTH), Vector3.new(normalCoord, sillY, alongCenter), WALL_COLOR, parent)
-		newPart(name .. "Lintel", Vector3.new(WALL_THICKNESS, lintelHeight, WINDOW_WIDTH), Vector3.new(normalCoord, lintelY, alongCenter), WALL_COLOR, parent)
-		glass = newPart(name .. "Window", Vector3.new(WALL_THICKNESS, WINDOW_HEIGHT, WINDOW_WIDTH), Vector3.new(normalCoord, windowY, alongCenter), WINDOW_COLOR, parent)
-	end
-
-	glass.Material = Enum.Material.Glass
-	glass.Transparency = WINDOW_TRANSPARENCY
+	-- Real Seat instance on top of the bowl so players can sit on it
+	-- (click the seat prompt, same as any other Roblox seat).
+	local seat = Instance.new("Seat")
+	seat.Name = "ToiletSeat"
+	seat.Anchored = true
+	seat.Size = Vector3.new(TOILET_BOWL_WIDTH - 0.5, TOILET_SEAT_HEIGHT, TOILET_BOWL_DEPTH - 1)
+	seat.Position = Vector3.new(toiletX, bowlY + TOILET_BOWL_HEIGHT / 2 + TOILET_SEAT_HEIGHT / 2, toiletZ - 0.3)
+	seat.Color = TOILET_COLOR
+	seat.Material = Enum.Material.SmoothPlastic
+	seat.Parent = parent
 end
 
 local function buildHouse(basePosition: Vector3): Model
@@ -287,7 +165,7 @@ local function buildHouse(basePosition: Vector3): Model
 	local floorY = basePosition.Y + 0.5
 	local floor = newPart(
 		"Floor",
-		Vector3.new(WIDTH, FLOOR_THICKNESS, DEPTH),
+		Vector3.new(WIDTH, 1, DEPTH),
 		Vector3.new(basePosition.X, floorY, basePosition.Z),
 		Color3.fromRGB(96, 72, 48),
 		house
@@ -298,10 +176,28 @@ local function buildHouse(basePosition: Vector3): Model
 	local halfWidth = WIDTH / 2
 	local halfDepth = DEPTH / 2
 
-	-- North, South and East walls are solid, each with a window (v7).
-	buildWindowedWall("NorthWall", "X", basePosition.Z - halfDepth, basePosition.X, WIDTH, wallY, floorY, house)
-	buildWindowedWall("SouthWall", "X", basePosition.Z + halfDepth, basePosition.X, WIDTH, wallY, floorY, house)
-	buildWindowedWall("EastWall", "Z", basePosition.X + halfWidth, basePosition.Z, DEPTH, wallY, floorY, house)
+	-- North, South and East walls are solid.
+	newPart(
+		"NorthWall",
+		Vector3.new(WIDTH, WALL_HEIGHT, WALL_THICKNESS),
+		Vector3.new(basePosition.X, wallY, basePosition.Z - halfDepth),
+		WALL_COLOR,
+		house
+	)
+	newPart(
+		"SouthWall",
+		Vector3.new(WIDTH, WALL_HEIGHT, WALL_THICKNESS),
+		Vector3.new(basePosition.X, wallY, basePosition.Z + halfDepth),
+		WALL_COLOR,
+		house
+	)
+	newPart(
+		"EastWall",
+		Vector3.new(WALL_THICKNESS, WALL_HEIGHT, DEPTH),
+		Vector3.new(basePosition.X + halfWidth, wallY, basePosition.Z),
+		WALL_COLOR,
+		house
+	)
 
 	-- West wall faces Spawn (Spawn is at world X=0, this house is at X=24,
 	-- so walking straight from Spawn reaches the -X wall first). It has the
@@ -347,114 +243,11 @@ local function buildHouse(basePosition: Vector3): Model
 	local hingeZ = basePosition.Z - DOOR_WIDTH / 2
 	setupSwingingDoor(door, westX, hingeZ)
 
-	-- Two beds (v6): pushed flush against EastWall, the wall opposite the
-	-- door, and spaced apart along Z so they don't touch each other, the
-	-- North/South walls, or the door's swing.
-	local bedX = basePosition.X + (halfWidth - WALL_THICKNESS / 2 - BED_LENGTH / 2)
-	buildBed(bedX, basePosition.Z - BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
-	buildBed(bedX, basePosition.Z + BED_ROW_OFFSET, floorY, "X", 1, BED_LENGTH, BED_WIDTH, house)
-
-	-- Staircase geometry (v8/v9): computed before Floor2 so Floor2 can carve
-	-- out a matching stairwell hole (v9) -- see below. Starts flush against
-	-- the inside of NorthWall and runs along +Z, centered in X so it stays
-	-- clear of the door (WestWall) and the beds (against EastWall).
-	local firstFloorSurfaceY = floorY + 0.5
-	local climb = FLOOR_THICKNESS + WALL_HEIGHT
-	local stepHeight = climb / STAIR_STEP_COUNT
-	local stairStartZ = basePosition.Z - halfDepth + WALL_THICKNESS / 2
-	local stairRunZ = STAIR_STEP_COUNT * STAIR_STEP_DEPTH
-
-	-- Second floor (v8): a windowed box identical in footprint to the first
-	-- floor, sitting directly on top of the first floor's walls. Floor2's
-	-- bottom is flush with wallTop (the first floor's wall top), and all 4
-	-- sides get a window -- no door needed since you reach it via Stairs.
-	--
-	-- v9: Floor2 used to be one solid slab covering the WHOLE footprint,
-	-- including directly above the staircase -- so climbing players hit a
-	-- solid ceiling a few steps from the top and got stuck (the "поремонтуй"
-	-- report from Slack: a player wedged under the Floor2 ceiling, looking up
-	-- at its underside). Floor2 is now built as 4 strips (left/right of the
-	-- stairwell, plus north/south slivers within the stairwell's own X band)
-	-- that leave a rectangular hole exactly where the staircase needs
-	-- headroom, with STAIRWELL_MARGIN studs of clearance on the open sides so
-	-- players don't clip the edges while walking through.
-	local floorY2 = wallTop + 0.5
-	local STAIRWELL_MARGIN = 1
-	local holeXMin = basePosition.X - STAIR_WIDTH / 2 - STAIRWELL_MARGIN
-	local holeXMax = basePosition.X + STAIR_WIDTH / 2 + STAIRWELL_MARGIN
-	local holeZMin = stairStartZ -- flush with NorthWall's inner face; the wall itself already bounds this side
-	local holeZMax = stairStartZ + stairRunZ + STAIRWELL_MARGIN
-
-	local northZ = basePosition.Z - halfDepth
-	local southZ = basePosition.Z + halfDepth
-	local westXEdge = basePosition.X - halfWidth
-	local eastXEdge = basePosition.X + halfWidth
-
-	newPart(
-		"Floor2West",
-		Vector3.new(holeXMin - westXEdge, FLOOR_THICKNESS, DEPTH),
-		Vector3.new((westXEdge + holeXMin) / 2, floorY2, basePosition.Z),
-		Color3.fromRGB(96, 72, 48),
-		house
-	)
-	newPart(
-		"Floor2East",
-		Vector3.new(eastXEdge - holeXMax, FLOOR_THICKNESS, DEPTH),
-		Vector3.new((holeXMax + eastXEdge) / 2, floorY2, basePosition.Z),
-		Color3.fromRGB(96, 72, 48),
-		house
-	)
-	newPart(
-		"Floor2North",
-		Vector3.new(holeXMax - holeXMin, FLOOR_THICKNESS, holeZMin - northZ),
-		Vector3.new(basePosition.X, floorY2, (northZ + holeZMin) / 2),
-		Color3.fromRGB(96, 72, 48),
-		house
-	)
-	newPart(
-		"Floor2South",
-		Vector3.new(holeXMax - holeXMin, FLOOR_THICKNESS, southZ - holeZMax),
-		Vector3.new(basePosition.X, floorY2, (holeZMax + southZ) / 2),
-		Color3.fromRGB(96, 72, 48),
-		house
-	)
-
-	local wallTop2 = floorY2 + 0.5 + WALL_HEIGHT
-	local wallY2 = floorY2 + 0.5 + WALL_HEIGHT / 2
-
-	buildWindowedWall("NorthWall2", "X", basePosition.Z - halfDepth, basePosition.X, WIDTH, wallY2, floorY2, house)
-	buildWindowedWall("SouthWall2", "X", basePosition.Z + halfDepth, basePosition.X, WIDTH, wallY2, floorY2, house)
-	buildWindowedWall("EastWall2", "Z", basePosition.X + halfWidth, basePosition.Z, DEPTH, wallY2, floorY2, house)
-	buildWindowedWall("WestWall2", "Z", basePosition.X - halfWidth, basePosition.Z, DEPTH, wallY2, floorY2, house)
-
-	-- One bed on the second floor (v10, per Slack). Reuses the same bedX as
-	-- the ground floor's beds (flush against EastWall2), centered along Z --
-	-- the stairwell hole is confined to X [holeXMin, holeXMax], well west of
-	-- EastWall2, so this whole strip of Floor2 is solid and clear of it.
-	buildBed(bedX, basePosition.Z, floorY2, "X", 1, BED_LENGTH, BED_WIDTH, house)
-
-	-- Staircase (v8): STAIR_STEP_COUNT solid blocks, each one step taller
-	-- than the last -- a classic blocky staircase, no ramps or rotation.
-	-- Together they climb the full gap between the first floor's surface and
-	-- the second floor's surface (FLOOR_THICKNESS + WALL_HEIGHT studs), now
-	-- with open headroom the whole way up thanks to the v9 Floor2 hole above.
-	for i = 1, STAIR_STEP_COUNT do
-		local stepFullHeight = i * stepHeight
-		local stepZ = stairStartZ + STAIR_STEP_DEPTH * (i - 0.5)
-		local step = newPart(
-			"Stair" .. i,
-			Vector3.new(STAIR_WIDTH, stepFullHeight, STAIR_STEP_DEPTH),
-			Vector3.new(basePosition.X, firstFloorSurfaceY + stepFullHeight / 2, stepZ),
-			STAIR_COLOR,
-			house
-		)
-		step.Material = Enum.Material.Wood
-	end
+	-- Toilet on the first (and only) floor, tucked in the far corner.
+	buildToilet(basePosition, floorY, halfWidth, halfDepth, house)
 
 	-- Flat overhanging roof: two stacked axis-aligned slabs, no rotation.
-	-- Now sits on the SECOND floor's walls (wallTop2), not the first
-	-- floor's.
-	local roofY = wallTop2 + ROOF_THICKNESS / 2
+	local roofY = wallTop + ROOF_THICKNESS / 2
 	newPart(
 		"RoofSlab",
 		Vector3.new(WIDTH + ROOF_OVERHANG * 2, ROOF_THICKNESS, DEPTH + ROOF_OVERHANG * 2),
