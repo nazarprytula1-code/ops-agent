@@ -25,6 +25,11 @@ local TweenService = game:GetService("TweenService")
 -- back toward Spawn/the house, since the building is east of Spawn now.
 -- If this still overlaps the football field, tell us roughly where the
 -- field is (or its Studio Position/Size) and we'll move it precisely.
+--
+-- v4: added interior furnishings per Slack request ("поставь щось в
+-- лікарні" -- "put something in the hospital"): a reception desk just
+-- inside the entrance and a hospital bed against the far (north) wall
+-- (see buildHospital below). The building was an empty shell before this.
 
 local HOSPITAL_POSITION = Vector3.new(150, 0, -40)
 local WALL_HEIGHT = 36
@@ -228,6 +233,61 @@ local function buildHospital(basePosition: Vector3): Model
 		Vector3.new(CROSS_THICKNESS, CROSS_ARM_WIDTH, CROSS_ARM_LENGTH),
 		Vector3.new(crossX, crossY, crossZ),
 		TRIM_COLOR,
+		hospital
+	)
+
+	-- Interior furnishings, per Slack request ("поставь щось в лікарні" --
+	-- "put something in the hospital"): a reception desk just inside the
+	-- entrance and a hospital bed against the far (north) wall, so the
+	-- building isn't an empty shell. All positions are derived from the
+	-- existing wall/floor variables above so they stay clear of the walls
+	-- regardless of WIDTH/DEPTH/WALL_THICKNESS tuning.
+	local interiorFloorY = floorY + 0.5
+
+	local deskWidth = 3
+	local deskLength = 10
+	local deskHeight = 3
+	local deskX = westX + WALL_THICKNESS / 2 + deskWidth / 2 + 1
+	newPart(
+		"ReceptionDesk",
+		Vector3.new(deskWidth, deskHeight, deskLength),
+		Vector3.new(deskX, interiorFloorY + deskHeight / 2, basePosition.Z),
+		Color3.fromRGB(230, 230, 230),
+		hospital
+	)
+	newPart(
+		"DeskSign",
+		Vector3.new(0.3, 1.2, 1.2),
+		Vector3.new(deskX + deskWidth / 2 + 0.15, interiorFloorY + deskHeight - 1, basePosition.Z),
+		TRIM_COLOR,
+		hospital
+	)
+
+	local bedWidth = 4
+	local bedLength = 7
+	local bedFrameHeight = 1.6
+	local northWallInnerZ = basePosition.Z - halfDepth + WALL_THICKNESS / 2
+	local bedZ = northWallInnerZ + bedLength / 2 + 0.5
+	local bedX = basePosition.X + halfWidth / 2
+	newPart(
+		"BedFrame",
+		Vector3.new(bedWidth, bedFrameHeight, bedLength),
+		Vector3.new(bedX, interiorFloorY + bedFrameHeight / 2, bedZ),
+		Color3.fromRGB(180, 180, 180),
+		hospital
+	)
+	newPart(
+		"BedMattress",
+		Vector3.new(bedWidth - 0.6, 0.8, bedLength - 0.4),
+		Vector3.new(bedX, interiorFloorY + bedFrameHeight + 0.4, bedZ),
+		Color3.fromRGB(255, 255, 255),
+		hospital
+	)
+	newPart(
+		"BedPillow",
+		Vector3.new(1.6, 0.6, bedLength - 0.4),
+		Vector3.new(bedX - bedWidth / 2 + 1.2, interiorFloorY + bedFrameHeight + 0.9, bedZ),
+		Color3.fromRGB(255, 255, 255),
 		hospital
 	)
 
