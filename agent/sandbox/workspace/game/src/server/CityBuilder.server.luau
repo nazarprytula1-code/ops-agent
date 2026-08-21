@@ -57,14 +57,30 @@ local TweenService = game:GetService("TweenService")
 -- overlapping each other, the block edge/road, or their own tree -- the
 -- bed's position is computed from HOUSE_SIZE/WALL_THICKNESS/BED_LENGTH at
 -- runtime (see buildCityHouse), so it scales automatically with no extra
--- change needed. BLOCK_SIZE, ROAD_WIDTH, GRID_SIZE and CITY_ORIGIN are
--- unchanged -- only the houses/beds and the spacing they need got bigger.
+-- change needed.
+--
+-- v8: v7 only checked that houses stayed apart from their row-neighbors
+-- (via PITCH) and the block edge/road (via ROW_INSET) -- it missed that
+-- the corner house of one row (e.g. the north row) and the corner house of
+-- the perpendicular row (e.g. the west row) sit close to the same block
+-- corner, and with the bigger 1.5x houses they overlapped each other there
+-- (the "хати перетинаються" report from Slack). BLOCK_SIZE is now bigger
+-- (68->94) so each row can sit far enough from the block center (pushing
+-- rowPerp up, which separates it from the perpendicular row at the corner)
+-- while still keeping a margin from the block edge/road; ROW_INSET is
+-- retuned (12->10) to fit both margins for the new house size. Both the
+-- corner-corner gap and the edge-to-road gap now have a few studs of
+-- clearance -- see the buildBlock geometry below. This also grows the
+-- overall city footprint, so Workspace.Baseplate's Z size is extended in
+-- default.project.json (730->820) so the city's far edge still lands on
+-- solid ground instead of past the baseplate (the same class of bug as the
+-- v2 note above, now re-triggered by the city simply being bigger).
 
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
-local BLOCK_SIZE = 68 -- footprint of one quarter, studs
+local BLOCK_SIZE = 94 -- footprint of one quarter, studs
 local ROAD_WIDTH = 20 -- road width between quarters and around the outer edge
-local ROW_INSET = 12 -- distance from a block's edge to its house row centerline
+local ROW_INSET = 10 -- distance from a block's edge to its house row centerline
 local PITCH = 21 -- spacing between the 3 house centers along one row
 local TREE_OFFSET = 9 -- how far the tree sits from its house, along the row
 local CITY_ORIGIN = Vector3.new(0, 0, 260) -- close enough to walk to from Spawn (0,0,0); still clear of the starter house (24,0,0)
