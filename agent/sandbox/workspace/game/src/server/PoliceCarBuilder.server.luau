@@ -1,5 +1,6 @@
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 
@@ -18,6 +19,18 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- rather than re-derived, recolored into a black-and-white police livery
 -- with a red/blue roof light bar (same flashing-light technique
 -- PoliceBuilder.server.luau's addSignAndLights uses for the station roof).
+--
+-- v2: per Slack request ("зроби щоб на машині можна було їхати"), the car
+-- is now actually drivable. All parts are built anchored (so the initial
+-- placement via GroundUtils is exact and doesn't jitter on spawn), then
+-- unanchored and rigidly welded to Body once positioned. A VehicleSeat is
+-- welded in too -- Roblox seats already auto-seat a touching player with
+-- no extra script, and expose Throttle/Steer once occupied. Since there's
+-- no separate wheel/hinge drivetrain (the wheels are just decorative
+-- cylinders, like CarBuilder's), a small Heartbeat loop (wireDriving)
+-- turns Throttle/Steer into actual movement by setting the welded
+-- assembly's AssemblyLinearVelocity/AssemblyAngularVelocity directly --
+-- the common lightweight "no suspension" arcade-vehicle approach.
 local GARAGE_CENTER_X = -40 -- GARAGE_CENTER_X from GarageBuilder.server.luau
 local GARAGE_CENTER_Z = -125 -- GARAGE_CENTER_Z from GarageBuilder.server.luau
 local GARAGE_HALF_WIDTH = 10 -- WIDTH / 2 from GarageBuilder
@@ -47,6 +60,15 @@ local WHEEL_Z_OFFSET = BODY_LENGTH / 2 - WHEEL_DIAMETER / 2 - 1.5 -- front/rear 
 
 local RIDE_HEIGHT_RATIO = 0.55 -- fraction of wheel diameter the body's underside sits above wheel center
 
+local SEAT_WIDTH = CABIN_WIDTH - 1
+local SEAT_LENGTH = CABIN_LENGTH - 3
+local SEAT_HEIGHT = 1
+
+-- Driving feel: no real suspension/drivetrain, so movement is applied
+-- directly as assembly velocity every Heartbeat while a player is seated.
+local MAX_SPEED = 45 -- studs/second at full throttle
+local TURN_RATE = 2.2 -- radians/second at full steer
+
 -- Roof light bar: same alternating red/blue flashing-light approach as
 -- PoliceBuilder.server.luau's addSignAndLights.
 local LIGHT_FLASH_SECONDS = 0.4
@@ -57,7 +79,7 @@ local LIGHT_OFF_COLOR = Color3.fromRGB(40, 40, 45)
 local function newBoxPart(name: string, size: Vector3, position: Vector3, color: Color3, parent: Instance): Part
 	local part = Instance.new("Part")
 	part.Name = name
-	part.Anchored = true
+	part.Anchored = true -- unanchored + welded once the whole car is positioned; see unanchorAndWeld
 	part.Size = size
 	part.Position = position
 	part.Color = color
@@ -115,6 +137,44 @@ local function addRoofLights(x: number, roofY: number, z: number, parent: Instan
 	end)
 end
 
+-- Unanchors every BasePart under `car` except `body`, and rigidly welds
+-- each of them to `body` with a WeldConstraint, then unanchors `body`
+-- itself last (so nothing falls/shifts while the welds are still being
+-- set up). The whole car then moves and falls as one physics assembly.
+local function unanchorAndWeld(car: Model, body: BasePart)
+	for _, descendant in ipairs(car:GetDescendants()) do
+		if descendant:IsA("BasePart") and descendant ~= body then
+			descendant.Anchored = false
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = body
+			weld.Part1 = descendant
+			weld.Parent = descendant
+		end
+	end
+	body.Anchored = false
+end
+
+-- Turns a seated player's Throttle/Steer into actual movement, since this
+-- car has no wheel/hinge drivetrain. `forward` is the world-space unit
+-- vector the car's hood points toward (see buildPoliceCar).
+local function wireDriving(seat: VehicleSeat, body: BasePart, forward: Vector3)
+	local connection
+	connection = RunService.Heartbeat:Connect(function()
+		if not seat.Parent then
+			connection:Disconnect()
+			return
+		end
+
+		if seat.Occupant then
+			local moveDirection = (body.CFrame:VectorToWorldSpace(forward)) * seat.Throttle * MAX_SPEED
+			body.AssemblyLinearVelocity = Vector3.new(moveDirection.X, body.AssemblyLinearVelocity.Y, moveDirection.Z)
+			body.AssemblyAngularVelocity = Vector3.new(0, -seat.Steer * TURN_RATE, 0)
+		else
+			body.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+		end
+	end)
+end
+
 -- groundY is the real top-of-ground surface the wheels rest on.
 local function buildPoliceCar(x: number, groundY: number, z: number): Model
 	local car = Instance.new("Model")
@@ -144,6 +204,10 @@ local function buildPoliceCar(x: number, groundY: number, z: number): Model
 		car
 	)
 
+	-- CanCollide = false: the seat below sits inside this same footprint,
+	-- and this box is a solid stand-in for the whole greenhouse (roof +
+	-- windows), not a hollow shell -- without this, a player could never
+	-- physically touch (and so never sit in) the DriverSeat underneath it.
 	local cabin = newBoxPart(
 		"Cabin",
 		Vector3.new(CABIN_WIDTH, CABIN_HEIGHT, CABIN_LENGTH),
@@ -151,6 +215,7 @@ local function buildPoliceCar(x: number, groundY: number, z: number): Model
 		CABIN_COLOR,
 		car
 	)
+	cabin.CanCollide = false
 
 	newWheel("WheelFrontLeft", Vector3.new(x - WHEEL_X_OFFSET, wheelY, z + WHEEL_Z_OFFSET), car)
 	newWheel("WheelFrontRight", Vector3.new(x + WHEEL_X_OFFSET, wheelY, z + WHEEL_Z_OFFSET), car)
@@ -158,6 +223,26 @@ local function buildPoliceCar(x: number, groundY: number, z: number): Model
 	newWheel("WheelRearRight", Vector3.new(x + WHEEL_X_OFFSET, wheelY, z - WHEEL_Z_OFFSET), car)
 
 	addRoofLights(x, cabinY + CABIN_HEIGHT / 2 + 0.3, z + CABIN_Z_OFFSET, car)
+
+	-- Driver seat: sits on the cabin floor. Roblox auto-seats a touching
+	-- player with no extra script; Throttle/Steer are then read by
+	-- wireDriving below.
+	local seat = Instance.new("VehicleSeat")
+	seat.Name = "DriverSeat"
+	seat.Anchored = true
+	seat.Size = Vector3.new(SEAT_WIDTH, SEAT_HEIGHT, SEAT_LENGTH)
+	seat.Position = Vector3.new(x, bodyBottomY + BODY_HEIGHT + SEAT_HEIGHT / 2, z + CABIN_Z_OFFSET)
+	seat.Color = Color3.fromRGB(30, 30, 35)
+	seat.Material = Enum.Material.Fabric
+	seat.Parent = car
+
+	unanchorAndWeld(car, body)
+
+	-- The hood/front of the car is the +Z end (CABIN_Z_OFFSET shifts the
+	-- cabin slightly toward the rear, -Z), so "forward" is world +Z at
+	-- spawn; wireDriving re-expresses that through Body's CFrame every
+	-- frame so it still means "forward" after the car turns.
+	wireDriving(seat, body, Vector3.new(0, 0, 1))
 
 	car.PrimaryPart = body
 	return car
