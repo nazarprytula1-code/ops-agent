@@ -55,6 +55,12 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- CityBuilder.server.luau, extended with a `width` parameter since the two
 -- openings aren't the same size) instead of two near-duplicate formulas.
 --
+-- v8: per Slack request ("зроби висоту клітки до даха в поліцейському
+-- участку"), the cell bars/gate now run CELL_BAR_HEIGHT = WALL_HEIGHT
+-- (was a fixed 9 studs), i.e. floor to ceiling -- flush with the top of
+-- every wall, exactly under the roof slab, with no gap above to climb/see
+-- over.
+--
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
@@ -94,7 +100,7 @@ local CELL_WIDTH = 10 -- along X
 local CELL_DEPTH = 8 -- along Z
 local CELL_OFFSET_X = -8 -- from building center, along X
 local CELL_OFFSET_Z = -6 -- from building center, along Z
-local CELL_BAR_HEIGHT = 9
+local CELL_BAR_HEIGHT = WALL_HEIGHT -- floor to ceiling, per Slack request ("зроби висоту клітки до даха")
 local CELL_BAR_RADIUS = 0.15
 local CELL_BAR_GAP = 1.3 -- spacing between bar centers along a side
 local CELL_RAIL_MARGIN = 0.1 -- how much thicker than 2x bar radius the top/bottom rails are
