@@ -50,14 +50,23 @@ local TweenService = game:GetService("TweenService")
 -- that file's own buildBed/v6 note). Each bed is pushed flush against the
 -- wall opposite that house's door (using the same doorAxis/doorSign the
 -- house was built with) so it never blocks the doorway or the door's swing.
+--
+-- v7: per Slack request, all 192 city houses (walls/door/roof) and their
+-- beds are scaled up 1.5x. PITCH, ROW_INSET and TREE_OFFSET are bumped by
+-- the same 1.5x so the bigger houses still fit 3-per-row without
+-- overlapping each other, the block edge/road, or their own tree -- the
+-- bed's position is computed from HOUSE_SIZE/WALL_THICKNESS/BED_LENGTH at
+-- runtime (see buildCityHouse), so it scales automatically with no extra
+-- change needed. BLOCK_SIZE, ROAD_WIDTH, GRID_SIZE and CITY_ORIGIN are
+-- unchanged -- only the houses/beds and the spacing they need got bigger.
 
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
 local BLOCK_SIZE = 68 -- footprint of one quarter, studs
 local ROAD_WIDTH = 20 -- road width between quarters and around the outer edge
-local ROW_INSET = 8 -- distance from a block's edge to its house row centerline
-local PITCH = 14 -- spacing between the 3 house centers along one row
-local TREE_OFFSET = 6 -- how far the tree sits from its house, along the row
+local ROW_INSET = 12 -- distance from a block's edge to its house row centerline
+local PITCH = 21 -- spacing between the 3 house centers along one row
+local TREE_OFFSET = 9 -- how far the tree sits from its house, along the row
 local CITY_ORIGIN = Vector3.new(0, 0, 260) -- close enough to walk to from Spawn (0,0,0); still clear of the starter house (24,0,0)
 
 local CITY_SIZE = GRID_SIZE * BLOCK_SIZE + (GRID_SIZE + 1) * ROAD_WIDTH
@@ -94,28 +103,28 @@ local PLATE_COLOR = Color3.fromRGB(90, 140, 60)
 local ROAD_COLOR = Color3.fromRGB(58, 58, 58)
 
 -- House
-local HOUSE_SIZE = 8 -- square footprint, width == depth
-local WALL_HEIGHT = 10
-local WALL_THICKNESS = 1
+local HOUSE_SIZE = 12 -- square footprint, width == depth
+local WALL_HEIGHT = 15
+local WALL_THICKNESS = 1.5
 local WALL_COLOR = Color3.fromRGB(194, 178, 128)
 local ROOF_COLOR = Color3.fromRGB(120, 60, 40)
 local ROOF_TRIM_COLOR = Color3.fromRGB(90, 44, 30)
 local DOOR_COLOR = Color3.fromRGB(63, 38, 22)
-local DOOR_WIDTH = 3.4
-local DOOR_HEIGHT = 6.5
+local DOOR_WIDTH = 5.1
+local DOOR_HEIGHT = 9.75
 local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
 local DOOR_MAX_ACTIVATION_DISTANCE = 8 -- keeps 192 simultaneous prompts cheap; only doors near the player activate
-local ROOF_OVERHANG = 1
-local ROOF_THICKNESS = 0.8
-local ROOF_TRIM_HEIGHT = 0.5
+local ROOF_OVERHANG = 1.5
+local ROOF_THICKNESS = 1.2
+local ROOF_TRIM_HEIGHT = 0.75
 
 -- Bed (one per city house, per v6 note above)
-local BED_LENGTH = 3 -- head-to-foot
-local BED_WIDTH = 2
-local BED_FRAME_HEIGHT = 0.7
-local BED_MATTRESS_HEIGHT = 0.4
-local BED_PILLOW_HEIGHT = 0.2
+local BED_LENGTH = 4.5 -- head-to-foot
+local BED_WIDTH = 3
+local BED_FRAME_HEIGHT = 1.05
+local BED_MATTRESS_HEIGHT = 0.6
+local BED_PILLOW_HEIGHT = 0.3
 local BED_FRAME_COLOR = Color3.fromRGB(92, 64, 40)
 local BED_MATTRESS_COLOR = Color3.fromRGB(235, 235, 225)
 local BED_PILLOW_COLOR = Color3.fromRGB(250, 250, 250)
