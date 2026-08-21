@@ -8,18 +8,26 @@ local GroundUtils = require(ReplicatedStorage.Shared:WaitForChild("GroundUtils")
 -- готель"). Separate from HouseBuilder/CityBuilder/TreeBuilder/CarBuilder and
 -- does not touch any of them.
 --
--- Placement: west of Spawn (world X=0), clear of the starter house/car/tree
--- (all near X=24) and clear of the City grid (Z=74..474). Ground Y is found
--- with GroundUtils.findGroundY instead of assumed, so the building always
--- sits flush on whatever the live baseplate/terrain actually is at that spot.
+-- v2 (per Slack: "постав готель в інше місце і постав сходи в готель"):
+--   * Moved from (-70, 0, -40) to HOTEL_XZ below, a different empty patch of
+--     baseplate, still clear of the starter house/car/tree (all near X=24)
+--     and the City grid (Z=74..474). Because the hotel is now east of Spawn
+--     instead of west, the entrance moved from the East wall to the West
+--     wall (ENTRANCE_SIGN = -1) so it still faces Spawn at world X=0.
+--   * Added real interior floor slabs between floor 1/2 and floor 2/3, each
+--     with a stairwell hole, plus solid ascending-block stairs (the same
+--     "axis-aligned boxes only" approach as every other builder here -- no
+--     rotated ramps/wedges, so there's no risk of a misoriented part) and
+--     guard rails around the 3 open edges of each hole (the 4th edge, where
+--     the flight arrives, is left open -- that's the landing). Floors 2 and
+--     3 are now actually reachable by walking up through the stairwell.
 --
--- Scope: this is an exterior shell, like the starter house. The ground floor
--- is a real walk-in room behind an openable door (ProximityPrompt, hold E).
--- Floors 2-3 are massing + windows only (no interior floor slabs or stairs)
--- -- there is currently no way to walk up to them. Adding real interior
--- floors/stairs is a reasonable follow-up if that's wanted.
+-- Ground Y is found with GroundUtils.findGroundY instead of assumed, so the
+-- building always sits flush on whatever the live baseplate/terrain actually
+-- is at that spot.
 
-local HOTEL_XZ = Vector3.new(-70, 0, -40)
+local HOTEL_XZ = Vector3.new(90, 0, -100)
+local ENTRANCE_SIGN = -1 -- -1 = West wall has the door (faces Spawn from here); 1 = East wall
 
 local FOOTPRINT_X = 30 -- building depth along X (North/South wall length)
 local FOOTPRINT_Z = 46 -- building frontage along Z (East/West wall length)
@@ -36,6 +44,9 @@ local DOOR_COLOR = Color3.fromRGB(63, 38, 22)
 local WINDOW_COLOR = Color3.fromRGB(140, 200, 225)
 local SIGN_BOARD_COLOR = Color3.fromRGB(40, 40, 44)
 local SIGN_TEXT_COLOR = Color3.fromRGB(255, 210, 90)
+local SLAB_COLOR = Color3.fromRGB(120, 118, 112)
+local STAIR_COLOR = Color3.fromRGB(150, 148, 142)
+local RAIL_COLOR = Color3.fromRGB(60, 60, 66)
 
 local DOOR_WIDTH = 10
 local DOOR_HEIGHT = 12 -- < FLOOR_HEIGHT, leaves room for a lintel above it
@@ -52,6 +63,15 @@ local NORTH_SOUTH_WINDOW_COUNT = 3 -- per floor, spaced along FOOTPRINT_X
 local ROOF_OVERHANG = 2
 local ROOF_THICKNESS = 1.5
 local ROOF_TRIM_HEIGHT = 1.2
+
+-- Interior slab (the floor between two levels) and stairwell.
+local SLAB_THICKNESS = 1
+local STAIR_WIDTH = 6 -- along X
+local STAIR_RUN = 20 -- along Z
+local STAIR_STEP_COUNT = 10
+local STAIR_MARGIN_FROM_WALL = 3 -- gap between the North wall's inner face and the first step
+local RAIL_HEIGHT = 3.5
+local RAIL_THICKNESS = 0.5
 
 local function newPart(name: string, size: Vector3, position: Vector3, color: Color3, parent: Instance): Part
 	local part = Instance.new("Part")
@@ -170,6 +190,118 @@ local function addWindowRow(
 	end
 end
 
+-- Builds the slab between two floors as a rectangular frame (4 non-
+-- overlapping strips) around a rectangular stairwell hole, so the hole is a
+-- real gap in the geometry rather than a part hidden behind another part.
+-- `slabCenterY` is the vertical center of the (thin) slab; its top is the
+-- floor of the level above, its bottom is the ceiling of the level below.
+local function buildSlabWithHole(
+	house: Instance,
+	name: string,
+	center: Vector3,
+	slabCenterY: number,
+	holeXMin: number,
+	holeXMax: number,
+	holeZMin: number,
+	holeZMax: number
+)
+	local xMin = center.X - FOOTPRINT_X / 2
+	local xMax = center.X + FOOTPRINT_X / 2
+	local zMin = center.Z - FOOTPRINT_Z / 2
+	local zMax = center.Z + FOOTPRINT_Z / 2
+
+	-- West strip: full Z span, X from the wall to the hole's west edge.
+	newPart(
+		name .. "West",
+		Vector3.new(holeXMin - xMin, SLAB_THICKNESS, FOOTPRINT_Z),
+		Vector3.new((xMin + holeXMin) / 2, slabCenterY, center.Z),
+		SLAB_COLOR,
+		house
+	)
+	-- East strip: full Z span, X from the hole's east edge to the wall.
+	newPart(
+		name .. "East",
+		Vector3.new(xMax - holeXMax, SLAB_THICKNESS, FOOTPRINT_Z),
+		Vector3.new((holeXMax + xMax) / 2, slabCenterY, center.Z),
+		SLAB_COLOR,
+		house
+	)
+	-- North strip: only the hole's X span, Z from the wall to the hole's north edge.
+	newPart(
+		name .. "North",
+		Vector3.new(holeXMax - holeXMin, SLAB_THICKNESS, holeZMin - zMin),
+		Vector3.new((holeXMin + holeXMax) / 2, slabCenterY, (zMin + holeZMin) / 2),
+		SLAB_COLOR,
+		house
+	)
+	-- South strip: only the hole's X span, Z from the hole's south edge to the wall.
+	newPart(
+		name .. "South",
+		Vector3.new(holeXMax - holeXMin, SLAB_THICKNESS, zMax - holeZMax),
+		Vector3.new((holeXMin + holeXMax) / 2, slabCenterY, (holeZMax + zMax) / 2),
+		SLAB_COLOR,
+		house
+	)
+end
+
+-- Solid ascending-block staircase (each step is one box, bottom flush on
+-- `fromY`, top flush at the step's height) climbing along +Z from
+-- `stairZMin` to `stairZMax`, centered on `stairX`. Axis-aligned only, same
+-- approach every other builder in this repo uses for structure.
+local function buildStairs(house: Instance, stairX: number, stairZMin: number, stairZMax: number, fromY: number)
+	local stepDepth = STAIR_RUN / STAIR_STEP_COUNT
+	local stepRise = FLOOR_HEIGHT / STAIR_STEP_COUNT
+	for i = 1, STAIR_STEP_COUNT do
+		local stepHeight = i * stepRise
+		newPart(
+			"Step" .. i,
+			Vector3.new(STAIR_WIDTH, stepHeight, stepDepth),
+			Vector3.new(stairX, fromY + stepHeight / 2, stairZMin + (i - 0.5) * stepDepth),
+			STAIR_COLOR,
+			house
+		)
+	end
+end
+
+-- Guard rails on the 3 edges of a stairwell hole that are a real fall risk
+-- when standing on the floor above (`floorTopY`, i.e. the slab's top face).
+-- The 4th edge (holeZMax, where the flight arrives) is left open -- that's
+-- the landing.
+local function addStairRails(
+	house: Instance,
+	holeXMin: number,
+	holeXMax: number,
+	holeZMin: number,
+	holeZMax: number,
+	floorTopY: number
+)
+	local railY = floorTopY + RAIL_HEIGHT / 2
+	local holeCenterX = (holeXMin + holeXMax) / 2
+	local holeCenterZ = (holeZMin + holeZMax) / 2
+
+	newPart(
+		"StairRailNorth",
+		Vector3.new(holeXMax - holeXMin + RAIL_THICKNESS, RAIL_HEIGHT, RAIL_THICKNESS),
+		Vector3.new(holeCenterX, railY, holeZMin),
+		RAIL_COLOR,
+		house
+	)
+	newPart(
+		"StairRailWest",
+		Vector3.new(RAIL_THICKNESS, RAIL_HEIGHT, holeZMax - holeZMin + RAIL_THICKNESS),
+		Vector3.new(holeXMin, railY, holeCenterZ),
+		RAIL_COLOR,
+		house
+	)
+	newPart(
+		"StairRailEast",
+		Vector3.new(RAIL_THICKNESS, RAIL_HEIGHT, holeZMax - holeZMin + RAIL_THICKNESS),
+		Vector3.new(holeXMax, railY, holeCenterZ),
+		RAIL_COLOR,
+		house
+	)
+end
+
 -- groundY is the real top-of-ground surface (from GroundUtils.findGroundY),
 -- not a hardcoded Y.
 local function buildHotel(center: Vector3, groundY: number): Model
@@ -189,10 +321,15 @@ local function buildHotel(center: Vector3, groundY: number): Model
 	)
 
 	local wallBaseY = floorSlabY + 0.5 -- bottom of the walls, flush on the foundation slab
-	local eastX = center.X + halfX
-	local westX = center.X - halfX
 	local northZ = center.Z - halfZ
 	local southZ = center.Z + halfZ
+
+	-- Stairwell footprint: a single straight run against the North wall,
+	-- centered on X, shared (stacked directly above itself) by both flights.
+	local stairXMin = center.X - STAIR_WIDTH / 2
+	local stairXMax = center.X + STAIR_WIDTH / 2
+	local stairZMin = northZ + WALL_THICKNESS / 2 + STAIR_MARGIN_FROM_WALL
+	local stairZMax = stairZMin + STAIR_RUN
 
 	for floor = 1, FLOORS do
 		local floorBottomY = wallBaseY + (floor - 1) * FLOOR_HEIGHT
@@ -218,79 +355,85 @@ local function buildHotel(center: Vector3, groundY: number): Model
 		addWindowRow(hotel, "Z", northZ, -1, center.X, FOOTPRINT_X, windowY, NORTH_SOUTH_WINDOW_COUNT)
 		addWindowRow(hotel, "Z", southZ, 1, center.X, FOOTPRINT_X, windowY, NORTH_SOUTH_WINDOW_COUNT)
 
-		-- West wall (back, perpendicular to X), full width, no door.
-		newPart(
-			"WestWall" .. floor,
-			Vector3.new(WALL_THICKNESS, FLOOR_HEIGHT, FOOTPRINT_Z),
-			Vector3.new(westX, wallY, center.Z),
-			wallColor,
-			hotel
-		)
-		addWindowRow(hotel, "X", westX, -1, center.Z, FOOTPRINT_Z, windowY, EAST_WEST_WINDOW_COUNT)
+		-- East and West walls (perpendicular to X). Floor 1 has the entrance
+		-- doorway on whichever side faces Spawn (ENTRANCE_SIGN); every other
+		-- wall/floor combination is solid with windows across the full width.
+		for _, sign in ipairs({ -1, 1 }) do
+			local wallX = center.X + sign * halfX
+			local wallName = sign < 0 and "WestWall" or "EastWall"
 
-		-- East wall (front, faces Spawn at world X=0). Floor 1 has the entrance
-		-- doorway; floors 2-3 are solid with windows across the full width.
-		if floor == 1 then
-			local sideSpan = (FOOTPRINT_Z - DOOR_WIDTH) / 2
-			newPart(
-				"EastWallNear",
-				Vector3.new(WALL_THICKNESS, FLOOR_HEIGHT, sideSpan),
-				Vector3.new(eastX, wallY, center.Z - halfZ + sideSpan / 2),
-				wallColor,
-				hotel
-			)
-			newPart(
-				"EastWallFar",
-				Vector3.new(WALL_THICKNESS, FLOOR_HEIGHT, sideSpan),
-				Vector3.new(eastX, wallY, center.Z + halfZ - sideSpan / 2),
-				wallColor,
-				hotel
-			)
-			local lintelHeight = FLOOR_HEIGHT - DOOR_HEIGHT
-			newPart(
-				"EastWallLintel",
-				Vector3.new(WALL_THICKNESS, lintelHeight, DOOR_WIDTH),
-				Vector3.new(eastX, floorBottomY + DOOR_HEIGHT + lintelHeight / 2, center.Z),
-				wallColor,
-				hotel
-			)
+			if floor == 1 and sign == ENTRANCE_SIGN then
+				local sideSpan = (FOOTPRINT_Z - DOOR_WIDTH) / 2
+				newPart(
+					wallName .. "Near",
+					Vector3.new(WALL_THICKNESS, FLOOR_HEIGHT, sideSpan),
+					Vector3.new(wallX, wallY, center.Z - halfZ + sideSpan / 2),
+					wallColor,
+					hotel
+				)
+				newPart(
+					wallName .. "Far",
+					Vector3.new(WALL_THICKNESS, FLOOR_HEIGHT, sideSpan),
+					Vector3.new(wallX, wallY, center.Z + halfZ - sideSpan / 2),
+					wallColor,
+					hotel
+				)
+				local lintelHeight = FLOOR_HEIGHT - DOOR_HEIGHT
+				newPart(
+					wallName .. "Lintel",
+					Vector3.new(WALL_THICKNESS, lintelHeight, DOOR_WIDTH),
+					Vector3.new(wallX, floorBottomY + DOOR_HEIGHT + lintelHeight / 2, center.Z),
+					wallColor,
+					hotel
+				)
 
-			local doorY = floorBottomY + DOOR_HEIGHT / 2
-			local door = newPart(
-				"Door",
-				Vector3.new(WALL_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH),
-				Vector3.new(eastX, doorY, center.Z),
-				DOOR_COLOR,
-				hotel
-			)
-			door.Material = Enum.Material.Wood
-			door.CanCollide = true
-			setupSwingingDoor(door, eastX, center.Z - DOOR_WIDTH / 2)
+				local doorY = floorBottomY + DOOR_HEIGHT / 2
+				local door = newPart(
+					"Door",
+					Vector3.new(WALL_THICKNESS, DOOR_HEIGHT, DOOR_WIDTH),
+					Vector3.new(wallX, doorY, center.Z),
+					DOOR_COLOR,
+					hotel
+				)
+				door.Material = Enum.Material.Wood
+				door.CanCollide = true
+				setupSwingingDoor(door, wallX, center.Z - DOOR_WIDTH / 2)
 
-			addWindowRow(hotel, "X", eastX, 1, center.Z, FOOTPRINT_Z, windowY, EAST_WEST_WINDOW_COUNT, WINDOW_DOOR_CLEARANCE)
-		else
-			newPart(
-				"EastWall" .. floor,
-				Vector3.new(WALL_THICKNESS, FLOOR_HEIGHT, FOOTPRINT_Z),
-				Vector3.new(eastX, wallY, center.Z),
-				wallColor,
-				hotel
-			)
-			addWindowRow(hotel, "X", eastX, 1, center.Z, FOOTPRINT_Z, windowY, EAST_WEST_WINDOW_COUNT)
+				addWindowRow(hotel, "X", wallX, sign, center.Z, FOOTPRINT_Z, windowY, EAST_WEST_WINDOW_COUNT, WINDOW_DOOR_CLEARANCE)
+			else
+				newPart(
+					wallName .. floor,
+					Vector3.new(WALL_THICKNESS, FLOOR_HEIGHT, FOOTPRINT_Z),
+					Vector3.new(wallX, wallY, center.Z),
+					wallColor,
+					hotel
+				)
+				addWindowRow(hotel, "X", wallX, sign, center.Z, FOOTPRINT_Z, windowY, EAST_WEST_WINDOW_COUNT)
+			end
 		end
 
-		-- Thin trim band marking the top of each floor (also hides the seam
-		-- between the ground-floor brick and the upper stucco color).
-		newPart(
-			"FloorBand" .. floor,
-			Vector3.new(FOOTPRINT_X + 0.4, 0.6, FOOTPRINT_Z + 0.4),
-			Vector3.new(center.X, floorBottomY + FLOOR_HEIGHT, center.Z),
-			BAND_TRIM_COLOR,
-			hotel
-		)
+		-- Interior slab + stairwell + stairs + rails between this floor and
+		-- the next one (not built above the top floor -- the roof covers it).
+		if floor < FLOORS then
+			local slabTopY = floorBottomY + FLOOR_HEIGHT
+			local slabCenterY = slabTopY - SLAB_THICKNESS / 2
+			buildSlabWithHole(hotel, "Slab" .. floor, center, slabCenterY, stairXMin, stairXMax, stairZMin, stairZMax)
+			buildStairs(hotel, center.X, stairZMin, stairZMax, floorBottomY)
+			addStairRails(hotel, stairXMin, stairXMax, stairZMin, stairZMax, slabTopY)
+		end
 	end
 
 	local wallTop = wallBaseY + FLOORS * FLOOR_HEIGHT
+
+	-- Trim band right under the roof (top floor only -- floors 1/2 no longer
+	-- need one now that the real interior slabs mark those seams).
+	newPart(
+		"FloorBand" .. FLOORS,
+		Vector3.new(FOOTPRINT_X + 0.4, 0.6, FOOTPRINT_Z + 0.4),
+		Vector3.new(center.X, wallTop, center.Z),
+		BAND_TRIM_COLOR,
+		hotel
+	)
 
 	-- Flat overhanging roof, same axis-aligned two-slab approach as
 	-- HouseBuilder/CityBuilder (no rotation math, no risk of a misoriented part).
@@ -310,12 +453,13 @@ local function buildHotel(center: Vector3, groundY: number): Model
 		hotel
 	)
 
-	-- "HOTEL" sign above the entrance, facing Spawn (+X).
+	-- "HOTEL" sign above the entrance, facing Spawn.
+	local entranceX = center.X + ENTRANCE_SIGN * halfX
 	local signY = wallBaseY + FLOOR_HEIGHT + 1.5
 	local sign = newPart(
 		"SignBoard",
 		Vector3.new(0.4, 3, DOOR_WIDTH + 6),
-		Vector3.new(eastX + 0.4, signY, center.Z),
+		Vector3.new(entranceX + ENTRANCE_SIGN * 0.4, signY, center.Z),
 		SIGN_BOARD_COLOR,
 		hotel
 	)
@@ -323,7 +467,7 @@ local function buildHotel(center: Vector3, groundY: number): Model
 
 	local signGui = Instance.new("SurfaceGui")
 	signGui.Name = "SignGui"
-	signGui.Face = Enum.NormalId.Right -- +X face, toward Spawn
+	signGui.Face = ENTRANCE_SIGN == 1 and Enum.NormalId.Right or Enum.NormalId.Left
 	signGui.LightInfluence = 0
 	signGui.Parent = sign
 
