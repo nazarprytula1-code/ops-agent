@@ -46,6 +46,15 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- the wall itself, so they read as glazing set into the wall without any
 -- z-fighting and without needing to cut an actual hole in the wall parts.
 --
+-- v7: per Slack request ("зроби тепер клітку в поліцейському участку"),
+-- added a jail cell inside the building, in the interior northwest corner
+-- (clear of every wall, window, and the entrance door's swing path): three
+-- fixed sides of vertical bars (see addBarSegment) plus a solid metal gate
+-- on a hinge, on the side facing into the room. The main entrance door and
+-- the cell gate now share one generalized setupSwingingDoor (ported from
+-- CityBuilder.server.luau, extended with a `width` parameter since the two
+-- openings aren't the same size) instead of two near-duplicate formulas.
+--
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
@@ -78,6 +87,20 @@ local WINDOW_GLASS_NORMAL_MARGIN = 0.8 -- glass is slightly thicker still, so it
 local WINDOW_GLASS_COLOR = Color3.fromRGB(150, 205, 230)
 local WINDOW_GLASS_TRANSPARENCY = 0.55
 
+-- Jail cell: a barred enclosure inside the building, in the back-left
+-- (northwest) interior corner -- away from the entrance door and clear of
+-- the walls/windows on every side.
+local CELL_WIDTH = 10 -- along X
+local CELL_DEPTH = 8 -- along Z
+local CELL_OFFSET_X = -8 -- from building center, along X
+local CELL_OFFSET_Z = -6 -- from building center, along Z
+local CELL_BAR_HEIGHT = 9
+local CELL_BAR_RADIUS = 0.15
+local CELL_BAR_GAP = 1.3 -- spacing between bar centers along a side
+local CELL_RAIL_MARGIN = 0.1 -- how much thicker than 2x bar radius the top/bottom rails are
+local CELL_BAR_COLOR = Color3.fromRGB(70, 70, 75)
+local GATE_WIDTH = 3
+
 local LIGHT_FLASH_SECONDS = 0.4
 local RED_LIGHT_COLOR = Color3.fromRGB(255, 40, 40)
 local BLUE_LIGHT_COLOR = Color3.fromRGB(40, 90, 255)
@@ -96,21 +119,35 @@ local function newPart(name: string, size: Vector3, position: Vector3, color: Co
 end
 
 -- Wires a ProximityPrompt (default key: E) onto `door` that swings it open,
--- then swings it shut. This is the same formula CityBuilder.server.luau's
--- setupSwingingDoor uses for an east-facing door (doorAxis="X", sign=1) --
--- reused verbatim (specialized to this one door) rather than re-derived, so
--- it inherits that already-shipped, visually-checked swing direction instead
--- of risking a new sign error.
-local function setupSwingingDoor(door: Part, wallX: number, hingeZ: number)
+-- then swings it shut. This is the same generalized formula
+-- CityBuilder.server.luau's setupSwingingDoor uses (doorAxis/sign/
+-- hingeWidthCoord/wallCoord), ported verbatim rather than re-derived, so it
+-- inherits that already-shipped, visually-checked swing direction instead of
+-- risking a new sign error. Extended with an explicit `width` parameter
+-- (CityBuilder hardcodes a single DOOR_WIDTH for every door; this building
+-- has two different-width openings -- the entrance and the cell gate).
+local function setupSwingingDoor(
+	door: Part,
+	doorAxis: string,
+	sign: number,
+	hingeWidthCoord: number,
+	wallCoord: number,
+	width: number,
+	objectText: string
+)
 	local closedCFrame = door.CFrame
-	local sign = 1 -- east-facing wall, matches CityBuilder's doorAxis="X", sign=1 case
-	local offsetNormal = wallX - sign * DOOR_WIDTH / 2
-	local openCFrame = CFrame.new(offsetNormal, door.Position.Y, hingeZ) * CFrame.Angles(0, DOOR_OPEN_ANGLE, 0)
+	local offsetNormal = wallCoord - sign * width / 2
+	local openCFrame
+	if doorAxis == "Z" then
+		openCFrame = CFrame.new(hingeWidthCoord, door.Position.Y, offsetNormal) * CFrame.Angles(0, DOOR_OPEN_ANGLE, 0)
+	else
+		openCFrame = CFrame.new(offsetNormal, door.Position.Y, hingeWidthCoord) * CFrame.Angles(0, DOOR_OPEN_ANGLE, 0)
+	end
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "OpenPrompt"
 	prompt.ActionText = "Open"
-	prompt.ObjectText = "Police Department"
+	prompt.ObjectText = objectText
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 8
@@ -244,6 +281,68 @@ local function addWindow(axis: string, wallCoord: number, alongCoord: number, y:
 	glass.CanCollide = false
 end
 
+-- Builds one straight run of vertical jail-cell bars (from `fromAlong` to
+-- `toAlong`, along the wall's length axis) plus a top and bottom rail
+-- connecting them, on a fixed-coordinate wall whose normal is `axis`
+-- ("Z" for the cell's North/South sides, "X" for its East/West sides).
+-- Bars are plain Cylinder parts rotated 90 degrees around Z to stand
+-- upright (same trick TreeBuilder.server.luau uses for its trunk), so
+-- there's no risk of a misoriented part.
+local function addBarSegment(
+	axis: string,
+	wallCoord: number,
+	fromAlong: number,
+	toAlong: number,
+	baseY: number,
+	parent: Instance,
+	namePrefix: string
+)
+	local length = toAlong - fromAlong
+	local barCount = math.max(2, math.floor(length / CELL_BAR_GAP) + 1)
+	local step = length / (barCount - 1)
+
+	for i = 0, barCount - 1 do
+		local alongCoord = fromAlong + i * step
+		local position
+		if axis == "Z" then
+			position = Vector3.new(alongCoord, baseY + CELL_BAR_HEIGHT / 2, wallCoord)
+		else
+			position = Vector3.new(wallCoord, baseY + CELL_BAR_HEIGHT / 2, alongCoord)
+		end
+
+		local bar = Instance.new("Part")
+		bar.Name = namePrefix .. "Bar" .. i
+		bar.Anchored = true
+		bar.Shape = Enum.PartType.Cylinder
+		bar.Size = Vector3.new(CELL_BAR_HEIGHT, CELL_BAR_RADIUS * 2, CELL_BAR_RADIUS * 2)
+		bar.CFrame = CFrame.new(position) * CFrame.Angles(0, 0, math.rad(90))
+		bar.Color = CELL_BAR_COLOR
+		bar.Material = Enum.Material.Metal
+		bar.Parent = parent
+	end
+
+	local railThickness = CELL_BAR_RADIUS * 2 + CELL_RAIL_MARGIN
+	local midAlong = (fromAlong + toAlong) / 2
+	local sizeAlong = length + CELL_BAR_RADIUS * 2
+	local railSize: Vector3
+	local topPosition: Vector3
+	local bottomPosition: Vector3
+	if axis == "Z" then
+		railSize = Vector3.new(sizeAlong, railThickness, railThickness)
+		topPosition = Vector3.new(midAlong, baseY + CELL_BAR_HEIGHT, wallCoord)
+		bottomPosition = Vector3.new(midAlong, baseY, wallCoord)
+	else
+		railSize = Vector3.new(railThickness, railThickness, sizeAlong)
+		topPosition = Vector3.new(wallCoord, baseY + CELL_BAR_HEIGHT, midAlong)
+		bottomPosition = Vector3.new(wallCoord, baseY, midAlong)
+	end
+
+	local topRail = newPart(namePrefix .. "TopRail", railSize, topPosition, CELL_BAR_COLOR, parent)
+	topRail.Material = Enum.Material.Metal
+	local bottomRail = newPart(namePrefix .. "BottomRail", railSize, bottomPosition, CELL_BAR_COLOR, parent)
+	bottomRail.Material = Enum.Material.Metal
+end
+
 local function buildPoliceDepartment(basePosition: Vector3): Model
 	local station = Instance.new("Model")
 	station.Name = "PoliceDepartment"
@@ -361,7 +460,7 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 	door.CanCollide = true
 
 	local hingeZ = basePosition.Z - DOOR_WIDTH / 2
-	setupSwingingDoor(door, eastX, hingeZ)
+	setupSwingingDoor(door, "X", 1, hingeZ, eastX, DOOR_WIDTH, "Police Department")
 
 	-- Flat overhanging roof: two stacked axis-aligned slabs, no rotation.
 	local roofY = wallTop + ROOF_THICKNESS / 2
@@ -381,6 +480,79 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 	)
 
 	addSignAndLights(basePosition, floorY, eastX, roofY, station)
+
+	-- Jail cell: three fixed barred sides plus one solid metal gate on a
+	-- hinge (per Slack request, "зроби клітку в поліцейському участку").
+	-- Sits in the interior northwest corner, clear of every wall/window and
+	-- of the entrance door's swing path.
+	local cellCenterX = basePosition.X + CELL_OFFSET_X
+	local cellCenterZ = basePosition.Z + CELL_OFFSET_Z
+	local cellHalfWidth = CELL_WIDTH / 2
+	local cellHalfDepth = CELL_DEPTH / 2
+	local cellBaseY = floorY + 0.5 -- floor's top surface
+
+	addBarSegment(
+		"Z",
+		cellCenterZ - cellHalfDepth,
+		cellCenterX - cellHalfWidth,
+		cellCenterX + cellHalfWidth,
+		cellBaseY,
+		station,
+		"CellNorth"
+	)
+	addBarSegment(
+		"X",
+		cellCenterX + cellHalfWidth,
+		cellCenterZ - cellHalfDepth,
+		cellCenterZ + cellHalfDepth,
+		cellBaseY,
+		station,
+		"CellEast"
+	)
+	addBarSegment(
+		"X",
+		cellCenterX - cellHalfWidth,
+		cellCenterZ - cellHalfDepth,
+		cellCenterZ + cellHalfDepth,
+		cellBaseY,
+		station,
+		"CellWest"
+	)
+
+	-- South side has the gate: two fixed bar segments flanking the opening.
+	local southZ = cellCenterZ + cellHalfDepth
+	local gateSideSpan = (CELL_WIDTH - GATE_WIDTH) / 2
+	addBarSegment(
+		"Z",
+		southZ,
+		cellCenterX - cellHalfWidth,
+		cellCenterX - cellHalfWidth + gateSideSpan,
+		cellBaseY,
+		station,
+		"CellSouthWest"
+	)
+	addBarSegment(
+		"Z",
+		southZ,
+		cellCenterX + cellHalfWidth - gateSideSpan,
+		cellCenterX + cellHalfWidth,
+		cellBaseY,
+		station,
+		"CellSouthEast"
+	)
+
+	local gate = newPart(
+		"CellGate",
+		Vector3.new(GATE_WIDTH, CELL_BAR_HEIGHT, CELL_BAR_RADIUS * 2),
+		Vector3.new(cellCenterX, cellBaseY + CELL_BAR_HEIGHT / 2, southZ),
+		CELL_BAR_COLOR,
+		station
+	)
+	gate.Material = Enum.Material.Metal
+	gate.CanCollide = true
+
+	local gateHingeX = cellCenterX - GATE_WIDTH / 2
+	setupSwingingDoor(gate, "Z", 1, gateHingeX, southZ, GATE_WIDTH, "Cell Gate")
 
 	station.PrimaryPart = floor
 	return station
