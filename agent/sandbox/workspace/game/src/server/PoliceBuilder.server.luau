@@ -11,15 +11,23 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- (24, 0, 0) with its door facing Spawn (world X=0). The car
 -- (CarBuilder.server.luau) is parked east of that house, and the NPC
 -- (NpcChat.server.luau) stands near it too. To stay clear of all of that,
--- the police department sits on the opposite (west) side of Spawn, at
--- (-40, 0, 0), with its own door facing east toward Spawn.
+-- the police department sits on the opposite (west) side of Spawn, along
+-- world X=-40, with its own door facing east toward Spawn.
+--
+-- v2: per Slack follow-up ("поставь в інше місце ... на право трохи 50
+-- блоків"), moved from (-40, 0, 0) to (-40, 0, -50) -- 50 studs "to the
+-- right" relative to someone standing at the station's door facing Spawn
+-- (facing +X, their right hand points toward -Z), while keeping X
+-- unchanged so it stays clear of the starter house/car/tree/NPC cluster
+-- (all within roughly X 6-52, Z -12..18) and well short of the city (which
+-- starts around Z=74).
 --
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
 -- of assuming the baseplate/terrain sits at a hardcoded Y.
 
-local POLICE_POSITION_XZ = Vector3.new(-40, 0, 0)
+local POLICE_POSITION_XZ = Vector3.new(-40, 0, -50)
 
 local WALL_HEIGHT = 32
 local WIDTH = 34 -- along X
