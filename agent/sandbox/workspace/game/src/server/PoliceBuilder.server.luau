@@ -78,6 +78,13 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- are still fixed offsets; west and north are both now computed from the
 -- real wall positions.
 --
+-- v11: per Slack request ("зменши двері в клітки"), the cell gate went
+-- back to a normal door-sized opening (GATE_HEIGHT = 9, GATE_WIDTH cut
+-- from 3 to 2.5) instead of running floor-to-ceiling like the rest of the
+-- cell's bars (that made it look like a giant swinging pillar, per the
+-- screenshot). A fixed metal lintel now fills the remaining gap above the
+-- gate up to the bar-height ceiling, so nothing can climb over it.
+--
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
@@ -126,7 +133,8 @@ local CELL_BAR_RADIUS = 0.15
 local CELL_BAR_GAP = 1.3 -- spacing between bar centers along a side
 local CELL_RAIL_MARGIN = 0.1 -- how much thicker than 2x bar radius the top/bottom rails are
 local CELL_BAR_COLOR = Color3.fromRGB(70, 70, 75)
-local GATE_WIDTH = 3
+local GATE_WIDTH = 2.5
+local GATE_HEIGHT = 9 -- a normal door-sized opening, not floor-to-ceiling like the rest of the cell's bars
 
 local LIGHT_FLASH_SECONDS = 0.4
 local RED_LIGHT_COLOR = Color3.fromRGB(255, 40, 40)
@@ -541,13 +549,28 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 
 	local gate = newPart(
 		"CellGate",
-		Vector3.new(GATE_WIDTH, CELL_BAR_HEIGHT, CELL_BAR_RADIUS * 2),
-		Vector3.new(cellCenterX, cellBaseY + CELL_BAR_HEIGHT / 2, cellSouthZ),
+		Vector3.new(GATE_WIDTH, GATE_HEIGHT, CELL_BAR_RADIUS * 2),
+		Vector3.new(cellCenterX, cellBaseY + GATE_HEIGHT / 2, cellSouthZ),
 		CELL_BAR_COLOR,
 		station
 	)
 	gate.Material = Enum.Material.Metal
 	gate.CanCollide = true
+
+	-- The gate is a normal door height, not floor-to-ceiling like the rest
+	-- of the cell -- a fixed metal lintel fills the remaining gap up to the
+	-- bar-height ceiling so there's nothing to climb over above it.
+	local gateLintelHeight = CELL_BAR_HEIGHT - GATE_HEIGHT
+	if gateLintelHeight > 0 then
+		local lintel = newPart(
+			"CellGateLintel",
+			Vector3.new(GATE_WIDTH, gateLintelHeight, CELL_BAR_RADIUS * 2),
+			Vector3.new(cellCenterX, cellBaseY + GATE_HEIGHT + gateLintelHeight / 2, cellSouthZ),
+			CELL_BAR_COLOR,
+			station
+		)
+		lintel.Material = Enum.Material.Metal
+	end
 
 	local gateHingeX = cellCenterX - GATE_WIDTH / 2
 	setupSwingingDoor(gate, "Z", 1, gateHingeX, cellSouthZ, GATE_WIDTH, "Cell Gate")
