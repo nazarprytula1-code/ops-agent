@@ -34,6 +34,7 @@ local GOAL_WIDTH = FootballConfig.GOAL_WIDTH
 local GOAL_HEIGHT = FootballConfig.GOAL_HEIGHT
 local GOAL_DEPTH = FootballConfig.GOAL_DEPTH
 local POST_THICKNESS = FootballConfig.POST_THICKNESS
+local GOAL_NET_GAP = FootballConfig.GOAL_NET_GAP
 
 local function newBoxPart(
 	name: string,
@@ -92,8 +93,11 @@ local function buildGoal(name: string, goalLineX: number, pitchTopY: number, net
 	-- netSign points away from the pitch center (-1 for the goal at the -X
 	-- end, +1 for the goal at the +X end) so the net sits behind the posts
 	-- instead of inside the playing field. CanCollide true so a scored ball
-	-- stops in the net instead of rolling off into the world.
-	local netX = goalLineX + netSign * GOAL_DEPTH / 2
+	-- stops in the net instead of rolling off into the world. GOAL_NET_GAP
+	-- leaves an empty pocket between the goal line and the net's front face
+	-- so the ball can fully cross the line before the solid net stops it --
+	-- see GoalScoring.server.luau, which relies on that pocket to detect a goal.
+	local netX = goalLineX + netSign * (GOAL_NET_GAP + GOAL_DEPTH / 2)
 	local net = newBoxPart(
 		"Net",
 		Vector3.new(GOAL_DEPTH, GOAL_HEIGHT, GOAL_WIDTH + POST_THICKNESS),
