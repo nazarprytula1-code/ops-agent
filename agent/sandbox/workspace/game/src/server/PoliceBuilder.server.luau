@@ -61,6 +61,14 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- every wall, exactly under the roof slab, with no gap above to climb/see
 -- over.
 --
+-- v9: per Slack request ("зроби грубину клітки щоб вона до лівої стіни
+-- була"), the cell's west side is no longer a separate row of bars a few
+-- studs in from the West wall -- it now runs flush against that wall's
+-- interior face (the West wall doubles as the cell's west side, so the
+-- redundant CellWest bar row was removed). Only the cell's east boundary
+-- is a fixed offset; the west boundary is computed from
+-- halfWidth/WALL_THICKNESS so it always lines up with the real wall.
+--
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
@@ -94,12 +102,17 @@ local WINDOW_GLASS_COLOR = Color3.fromRGB(150, 205, 230)
 local WINDOW_GLASS_TRANSPARENCY = 0.55
 
 -- Jail cell: a barred enclosure inside the building, in the back-left
--- (northwest) interior corner -- away from the entrance door and clear of
--- the walls/windows on every side.
-local CELL_WIDTH = 10 -- along X
+-- (northwest) interior corner -- away from the entrance door. Per Slack
+-- follow-up ("зроби грубину клітки щоб вона до лівої стіни була"), its
+-- west side is no longer a separate row of bars a few studs in from the
+-- West wall -- it now runs flush against that wall's interior face (the
+-- West wall itself becomes the cell's west side), so there's no gap to
+-- squeeze through. Only the east boundary is a fixed offset; the west
+-- boundary is computed from halfWidth/WALL_THICKNESS in buildPoliceDepartment
+-- so it always lines up with the real wall instead of a hardcoded guess.
+local CELL_EAST_X_OFFSET = -3 -- east boundary, from building center along X
 local CELL_DEPTH = 8 -- along Z
-local CELL_OFFSET_X = -8 -- from building center, along X
-local CELL_OFFSET_Z = -6 -- from building center, along Z
+local CELL_OFFSET_Z = -6 -- center, from building center along Z
 local CELL_BAR_HEIGHT = WALL_HEIGHT -- floor to ceiling, per Slack request ("зроби висоту клітки до даха")
 local CELL_BAR_RADIUS = 0.15
 local CELL_BAR_GAP = 1.3 -- spacing between bar centers along a side
@@ -487,65 +500,37 @@ local function buildPoliceDepartment(basePosition: Vector3): Model
 
 	addSignAndLights(basePosition, floorY, eastX, roofY, station)
 
-	-- Jail cell: three fixed barred sides plus one solid metal gate on a
-	-- hinge (per Slack request, "зроби клітку в поліцейському участку").
-	-- Sits in the interior northwest corner, clear of every wall/window and
-	-- of the entrance door's swing path.
-	local cellCenterX = basePosition.X + CELL_OFFSET_X
+	-- Jail cell: barred sides plus one solid metal gate on a hinge (per
+	-- Slack requests, "зроби клітку" then "зроби грубину клітки щоб вона до
+	-- лівої стіни була"). Sits in the interior northwest corner, clear of
+	-- the entrance door's swing path. Its west side is the building's own
+	-- West wall -- no separate row of bars there -- so the cell now runs
+	-- flush from that wall's interior face to its east boundary, with no
+	-- gap to squeeze through.
+	local cellEastX = basePosition.X + CELL_EAST_X_OFFSET
+	local cellWestX = basePosition.X - halfWidth + WALL_THICKNESS / 2 -- flush against the West wall's interior face
+	local cellCenterX = (cellWestX + cellEastX) / 2
 	local cellCenterZ = basePosition.Z + CELL_OFFSET_Z
-	local cellHalfWidth = CELL_WIDTH / 2
 	local cellHalfDepth = CELL_DEPTH / 2
 	local cellBaseY = floorY + 0.5 -- floor's top surface
 
-	addBarSegment(
-		"Z",
-		cellCenterZ - cellHalfDepth,
-		cellCenterX - cellHalfWidth,
-		cellCenterX + cellHalfWidth,
-		cellBaseY,
-		station,
-		"CellNorth"
-	)
+	addBarSegment("Z", cellCenterZ - cellHalfDepth, cellWestX, cellEastX, cellBaseY, station, "CellNorth")
 	addBarSegment(
 		"X",
-		cellCenterX + cellHalfWidth,
+		cellEastX,
 		cellCenterZ - cellHalfDepth,
 		cellCenterZ + cellHalfDepth,
 		cellBaseY,
 		station,
 		"CellEast"
 	)
-	addBarSegment(
-		"X",
-		cellCenterX - cellHalfWidth,
-		cellCenterZ - cellHalfDepth,
-		cellCenterZ + cellHalfDepth,
-		cellBaseY,
-		station,
-		"CellWest"
-	)
 
 	-- South side has the gate: two fixed bar segments flanking the opening.
 	local southZ = cellCenterZ + cellHalfDepth
-	local gateSideSpan = (CELL_WIDTH - GATE_WIDTH) / 2
-	addBarSegment(
-		"Z",
-		southZ,
-		cellCenterX - cellHalfWidth,
-		cellCenterX - cellHalfWidth + gateSideSpan,
-		cellBaseY,
-		station,
-		"CellSouthWest"
-	)
-	addBarSegment(
-		"Z",
-		southZ,
-		cellCenterX + cellHalfWidth - gateSideSpan,
-		cellCenterX + cellHalfWidth,
-		cellBaseY,
-		station,
-		"CellSouthEast"
-	)
+	local cellWidth = cellEastX - cellWestX
+	local gateSideSpan = (cellWidth - GATE_WIDTH) / 2
+	addBarSegment("Z", southZ, cellWestX, cellWestX + gateSideSpan, cellBaseY, station, "CellSouthWest")
+	addBarSegment("Z", southZ, cellEastX - gateSideSpan, cellEastX, cellBaseY, station, "CellSouthEast")
 
 	local gate = newPart(
 		"CellGate",
