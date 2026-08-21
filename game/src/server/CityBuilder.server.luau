@@ -76,6 +76,12 @@ local TweenService = game:GetService("TweenService")
 -- solid ground instead of past the baseplate (the same class of bug as the
 -- v2 note above, now re-triggered by the city simply being bigger).
 
+--
+-- v9: per Slack request, CITY_ORIGIN moved back (Z 260->300, +40 studs) for
+-- more clearance from the starter house near Spawn. Workspace.Baseplate's Z
+-- size is extended again (820->900) so the city's far edge (now further
+-- out) still lands on solid ground.
+
 -- Grid / layout
 local GRID_SIZE = 4 -- 4x4 = 16 blocks
 local BLOCK_SIZE = 94 -- footprint of one quarter, studs
@@ -83,7 +89,7 @@ local ROAD_WIDTH = 20 -- road width between quarters and around the outer edge
 local ROW_INSET = 10 -- distance from a block's edge to its house row centerline
 local PITCH = 21 -- spacing between the 3 house centers along one row
 local TREE_OFFSET = 9 -- how far the tree sits from its house, along the row
-local CITY_ORIGIN = Vector3.new(0, 0, 260) -- close enough to walk to from Spawn (0,0,0); still clear of the starter house (24,0,0)
+local CITY_ORIGIN = Vector3.new(0, 0, 300) -- still walkable from Spawn (0,0,0); pushed back from 260 per Slack (v9) for more clearance from the starter house (24,0,0)
 
 local CITY_SIZE = GRID_SIZE * BLOCK_SIZE + (GRID_SIZE + 1) * ROAD_WIDTH
 
