@@ -65,10 +65,22 @@ local ROOF_THICKNESS = 1.5
 local ROOF_TRIM_HEIGHT = 1.2
 
 -- Interior slab (the floor between two levels) and stairwell.
+--
+-- v3 (per Slack screenshot: character stuck/crouched at the bottom step,
+-- unable to climb): the original 10 steps over FLOOR_HEIGHT gave a 1.4-stud
+-- rise per step, too tall for the Humanoid to walk up automatically (it has
+-- to be able to step onto each riser without jumping). STAIR_STEP_RISE is
+-- now a fixed, known-comfortable 1 stud (the standard value used for
+-- walkable Roblox block stairs) and the step count is derived from
+-- FLOOR_HEIGHT so it always divides evenly; STAIR_STEP_DEPTH is a fixed
+-- comfortable 2-stud tread, and STAIR_RUN follows from that instead of
+-- being picked independently.
 local SLAB_THICKNESS = 1
 local STAIR_WIDTH = 6 -- along X
-local STAIR_RUN = 20 -- along Z
-local STAIR_STEP_COUNT = 10
+local STAIR_STEP_RISE = 1 -- studs per step -- low enough to walk up without jumping
+local STAIR_STEP_DEPTH = 2 -- studs per step (tread depth)
+local STAIR_STEP_COUNT = FLOOR_HEIGHT / STAIR_STEP_RISE -- FLOOR_HEIGHT must be a multiple of STAIR_STEP_RISE
+local STAIR_RUN = STAIR_STEP_COUNT * STAIR_STEP_DEPTH -- along Z
 local STAIR_MARGIN_FROM_WALL = 3 -- gap between the North wall's inner face and the first step
 local RAIL_HEIGHT = 3.5
 local RAIL_THICKNESS = 0.5
@@ -249,14 +261,12 @@ end
 -- `stairZMin` to `stairZMax`, centered on `stairX`. Axis-aligned only, same
 -- approach every other builder in this repo uses for structure.
 local function buildStairs(house: Instance, stairX: number, stairZMin: number, stairZMax: number, fromY: number)
-	local stepDepth = STAIR_RUN / STAIR_STEP_COUNT
-	local stepRise = FLOOR_HEIGHT / STAIR_STEP_COUNT
 	for i = 1, STAIR_STEP_COUNT do
-		local stepHeight = i * stepRise
+		local stepHeight = i * STAIR_STEP_RISE
 		newPart(
 			"Step" .. i,
-			Vector3.new(STAIR_WIDTH, stepHeight, stepDepth),
-			Vector3.new(stairX, fromY + stepHeight / 2, stairZMin + (i - 0.5) * stepDepth),
+			Vector3.new(STAIR_WIDTH, stepHeight, STAIR_STEP_DEPTH),
+			Vector3.new(stairX, fromY + stepHeight / 2, stairZMin + (i - 0.5) * STAIR_STEP_DEPTH),
 			STAIR_COLOR,
 			house
 		)
