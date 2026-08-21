@@ -31,6 +31,12 @@ local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 -- участок"), a small further nudge in the same direction -- 15 studs in
 -- -Z -- from (-40, 0, -80) to (-40, 0, -95).
 --
+-- v5: per Slack request ("зроби менші двері в поліцейському участку"),
+-- shrunk the door from 10x24 to 6x9 (still comfortably wider/taller than a
+-- default character). Every other doorway part (side wall segments, lintel,
+-- sign position) is derived from DOOR_WIDTH/DOOR_HEIGHT, so it resizes
+-- automatically with no other constants to touch.
+--
 -- Follows the same axis-aligned-boxes-only approach as HouseBuilder (no
 -- rotation math for the structure itself, so there's no risk of a
 -- misoriented part) and grounds itself via GroundUtils.findGroundY instead
@@ -49,8 +55,8 @@ local ROOF_TRIM_HEIGHT = 1.2
 local ROOF_OVERHANG = 3
 local ROOF_THICKNESS = 2
 local DOOR_COLOR = Color3.fromRGB(24, 34, 60)
-local DOOR_WIDTH = 10
-local DOOR_HEIGHT = 24
+local DOOR_WIDTH = 6
+local DOOR_HEIGHT = 9
 local DOOR_OPEN_ANGLE = math.rad(90)
 local DOOR_TWEEN_SECONDS = 0.4
 local TRIM_BAND_HEIGHT = 3
