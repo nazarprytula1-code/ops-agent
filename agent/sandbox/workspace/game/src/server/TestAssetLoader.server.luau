@@ -4,18 +4,29 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 
--- Loads a handful of public catalog Asset IDs into a dedicated, empty test
--- zone far from every other builder (house/car/tree at ~(24,0,0), the city
--- grid centered at (0,0,260) spanning roughly X[-186,186] Z[74,446]). The
--- test zone sits west of all of that, at X=-200, so nothing in this file can
--- ever overlap something another builder placed.
+-- Loads a handful of Asset IDs into a dedicated, empty test zone far from
+-- every other builder (house/car/tree at ~(24,0,0), the city grid centered
+-- at (0,0,260) spanning roughly X[-186,186] Z[74,446]). The test zone sits
+-- west of all of that, at X=-200, so nothing in this file can ever overlap
+-- something another builder placed.
 --
--- IMPORTANT: these are unverified public catalog assets requested from
--- Slack for load-testing complex geometry (multi MeshPart, PBR
--- SurfaceAppearance). Nobody on this side has previewed what they actually
--- look like before they land in the published place. Swap TEST_ASSETS or
--- remove this file entirely once the load test is done -- it is not meant
--- to be permanent set dressing.
+-- v1 used 3 random public catalog Asset IDs from Slack. All 3 failed at
+-- runtime with either "Asset is not trusted for this place" or "insert
+-- result had no Model/BasePart" -- confirmed via the v2 beacons/board below.
+-- This is a deliberate Roblox platform restriction, not a bug here:
+-- InsertService:LoadAsset only allows assets owned by the place's own
+-- creator account/group (or legacy assets explicitly marked Free) to be
+-- inserted at runtime, specifically to stop live scripts from pulling in
+-- arbitrary/malicious third-party models. There is no script-side
+-- workaround for that -- the asset has to actually be owned by this
+-- project's Roblox account or group.
+--
+-- v3: swapped in a single Asset ID (12617535294) that was added to the
+-- owning account/group's inventory, so it should be trusted this time.
+-- The old public IDs are kept commented out below for reference.
+--
+-- IMPORTANT: still swap TEST_ASSETS or remove this file entirely once the
+-- load test is done -- it is not meant to be permanent set dressing.
 --
 -- v2: the first version only reported success/failure via print/warn, which
 -- is invisible to anyone testing on the live published client (server
@@ -31,9 +42,12 @@ type TestAsset = {
 }
 
 local TEST_ASSETS: { TestAsset } = {
-	{ name = "PbrTreasureChest", assetId = 6768917255 },
-	{ name = "ComplexEnvironmentAsset", assetId = 9723979220 },
-	{ name = "MultiPartModel", assetId = 26424808 },
+	{ name = "OwnedTestAsset", assetId = 12617535294 },
+
+	-- v1 IDs -- all confirmed blocked/unusable at runtime, kept for reference:
+	-- { name = "PbrTreasureChest", assetId = 6768917255 }, -- "Asset is not trusted for this place"
+	-- { name = "ComplexEnvironmentAsset", assetId = 9723979220 }, -- "Asset is not trusted for this place"
+	-- { name = "MultiPartModel", assetId = 26424808 }, -- "insert result had no Model/BasePart"
 }
 
 local TEST_ZONE_ORIGIN = Vector3.new(-200, 0, 0)
