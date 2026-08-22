@@ -4,210 +4,102 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GroundUtils = require(ReplicatedStorage.Shared.GroundUtils)
 
--- Loads a handful of Asset IDs into a dedicated, empty test zone far from
--- every other builder (house/car/tree at ~(24,0,0), the city grid centered
--- at (0,0,260) spanning roughly X[-186,186] Z[74,446]). The test zone sits
--- west of all of that, at X=-200, so nothing in this file can ever overlap
--- something another builder placed.
+-- Loads one Asset ID (owned by this place's own creator account/group, per
+-- Slack) and places it clear of every other builder on the map.
 --
--- v1 used 3 random public catalog Asset IDs from Slack. All 3 failed at
--- runtime with either "Asset is not trusted for this place" or "insert
--- result had no Model/BasePart" -- confirmed via the v2 beacons/board below.
--- This is a deliberate Roblox platform restriction, not a bug here:
+-- History: v1 tried 3 random public catalog Asset IDs -- all failed at
+-- runtime with "Asset is not trusted for this place" or "insert result had
+-- no Model/BasePart". That's a deliberate Roblox platform restriction:
 -- InsertService:LoadAsset only allows assets owned by the place's own
--- creator account/group (or legacy assets explicitly marked Free) to be
--- inserted at runtime, specifically to stop live scripts from pulling in
--- arbitrary/malicious third-party models. There is no script-side
--- workaround for that -- the asset has to actually be owned by this
--- project's Roblox account or group.
+-- creator account/group (or legacy Free-marked assets) to be inserted at
+-- runtime, so live scripts can't pull in arbitrary third-party models.
+-- v2 added Neon beacons + a status board near Spawn to make pass/fail
+-- visible on the live client (server print/warn isn't). v3 swapped in
+-- Asset ID 12617535294, which was added to the owning account/group's
+-- inventory -- confirmed working (it's a house). v4 (this version) drops
+-- the beacons/board now that it's confirmed working, per Slack ("забери
+-- тестові написи"), and relocates the house away from the football
+-- stadium it landed on top of ("подалі від міста і стадіону").
 --
--- v3: swapped in a single Asset ID (12617535294) that was added to the
--- owning account/group's inventory, so it should be trusted this time.
--- The old public IDs are kept commented out below for reference.
---
--- IMPORTANT: still swap TEST_ASSETS or remove this file entirely once the
--- load test is done -- it is not meant to be permanent set dressing.
---
--- v2: the first version only reported success/failure via print/warn, which
--- is invisible to anyone testing on the live published client (server
--- Output is only visible from Studio, e.g. Team Test) -- that's the
--- "can't find the loaded models" report from Slack. This version also drops
--- a tall Neon beacon (with a floating label) at every test slot regardless
--- of success or failure, plus a small summary board just behind Spawn, so
--- the result is visible in-world to a normal player with no Studio access.
+-- Placement: LOAD_POSITION = (200, 0, 0), the open east side of the map,
+-- checked clear of every builder's footprint on main as of this change:
+--   - house/car/tree/workshop cluster: X in [0, 60],    Z in [-20, 40]
+--   - fire station:                    X in [85, 130],  Z in [-15, 25]
+--   - hotel:                           X in [75, 105],  Z in [-123, -77]
+--   - police + garage:                 X in [-60, -20], Z in [-140, -80]
+--   - hospital:                        X in [132, 168], Z in [-54, -26]
+--   - football pitch/fence/scoreboard: X in [-247, -13], Z in [-74, 68]
+--   - city grid (CITY_ORIGIN 0,0,300):  X in [-238, 238], Z in [62, 538]
+-- (200, 0) falls outside all of those, with margin, and inside the
+-- Baseplate's documented X range ([-256, 256] per default.project.json).
+-- Ground height still comes from GroundUtils.findGroundY, not a hardcoded
+-- Y, in case the live baseplate/terrain differs from that.
 
-type TestAsset = {
-	name: string,
-	assetId: number,
-}
+local OWNED_ASSET_ID = 12617535294
+local MODEL_NAME = "LoadedHouse"
 
-local TEST_ASSETS: { TestAsset } = {
-	{ name = "OwnedTestAsset", assetId = 12617535294 },
+local LOAD_POSITION = Vector3.new(200, 0, 0)
 
-	-- v1 IDs -- all confirmed blocked/unusable at runtime, kept for reference:
-	-- { name = "PbrTreasureChest", assetId = 6768917255 }, -- "Asset is not trusted for this place"
-	-- { name = "ComplexEnvironmentAsset", assetId = 9723979220 }, -- "Asset is not trusted for this place"
-	-- { name = "MultiPartModel", assetId = 26424808 }, -- "insert result had no Model/BasePart"
-}
-
-local TEST_ZONE_ORIGIN = Vector3.new(-200, 0, 0)
-local SPACING = 60 -- studs between each loaded asset along X
-
--- A few studs behind Spawn (0, 0.5, 0), facing away from the house
--- (X=24,Z=0) and the city grid (Z~260) -- clear ground with nothing else
--- built on it, and close enough that nobody has to hike 200 studs just to
--- see whether the load test worked at all.
-local STATUS_BOARD_POSITION = Vector3.new(0, 0, -20)
-
-local OK_COLOR = Color3.fromRGB(60, 220, 90)
-local FAIL_COLOR = Color3.fromRGB(230, 60, 60)
-
-local TestAssets = Workspace:FindFirstChild("TestAssets")
-if not TestAssets then
-	TestAssets = Instance.new("Folder")
-	TestAssets.Name = "TestAssets"
-	TestAssets.Parent = Workspace
+local LoadedAssets = Workspace:FindFirstChild("LoadedAssets")
+if not LoadedAssets then
+	LoadedAssets = Instance.new("Folder")
+	LoadedAssets.Name = "LoadedAssets"
+	LoadedAssets.Parent = Workspace
 else
-	TestAssets:ClearAllChildren()
+	LoadedAssets:ClearAllChildren()
+end
+
+-- Clean up the old v1-v3 TestAssets folder (beacons/board/first placement)
+-- if it's still sitting in Workspace from a previous run of this script.
+local oldTestAssets = Workspace:FindFirstChild("TestAssets")
+if oldTestAssets then
+	oldTestAssets:Destroy()
 end
 
 -- Sits an already-parented model on top of the real ground at (x, z),
 -- preserving whatever rotation the asset shipped with instead of resetting
 -- it to identity.
 local function placeOnGround(model: PVInstance, x: number, z: number)
-	local groundY = GroundUtils.findGroundY(x, z, TestAssets)
+	local groundY = GroundUtils.findGroundY(x, z, LoadedAssets)
 	local boundingCFrame, size = model:GetBoundingBox()
 	local rotationOnly = boundingCFrame - boundingCFrame.Position
 	model:PivotTo(CFrame.new(x, groundY + size.Y / 2, z) * rotationOnly)
 end
 
--- A tall, bright, always-on-top marker so a load attempt is visible from a
--- distance and from any camera angle, whether or not the asset itself
--- turned out to be tiny, dark, or (if the ID was bad) never loaded at all.
-local function createBeacon(name: string, x: number, z: number, richText: string, color: Color3, parent: Instance)
-	local groundY = GroundUtils.findGroundY(x, z, TestAssets)
+local success, containerOrError = pcall(function()
+	return InsertService:LoadAsset(OWNED_ASSET_ID)
+end)
 
-	local pole = Instance.new("Part")
-	pole.Name = name .. "Beacon"
-	pole.Anchored = true
-	pole.CanCollide = false
-	pole.Material = Enum.Material.Neon
-	pole.Color = color
-	pole.Size = Vector3.new(2, 40, 2)
-	pole.Position = Vector3.new(x, groundY + 20, z)
-	pole.Parent = parent
-
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "Label"
-	billboard.Adornee = pole
-	billboard.Size = UDim2.new(0, 220, 0, 60)
-	billboard.StudsOffset = Vector3.new(0, 4, 0)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = pole
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 0.3
-	label.BackgroundColor3 = Color3.new(0, 0, 0)
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextScaled = true
-	label.RichText = true
-	label.Text = richText
-	label.Parent = billboard
+if not success or not containerOrError then
+	warn(("TestAssetLoader: failed to load asset %d: %s"):format(OWNED_ASSET_ID, tostring(containerOrError)))
+	return
 end
 
-local function createStatusBoard(richLines: { string })
-	local groundY = GroundUtils.findGroundY(STATUS_BOARD_POSITION.X, STATUS_BOARD_POSITION.Z, TestAssets)
-
-	local board = Instance.new("Part")
-	board.Name = "TestAssetLoaderStatusBoard"
-	board.Anchored = true
-	board.CanCollide = false
-	board.Transparency = 1 -- invisible; only the BillboardGui needs to show
-	board.Size = Vector3.new(1, 1, 1)
-	board.Position = Vector3.new(STATUS_BOARD_POSITION.X, groundY + 6, STATUS_BOARD_POSITION.Z)
-	board.Parent = TestAssets
-
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "Summary"
-	billboard.Adornee = board
-	billboard.Size = UDim2.new(0, 340, 0, 160)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = board
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 0.25
-	label.BackgroundColor3 = Color3.new(0, 0, 0)
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextScaled = true
-	label.RichText = true
-	label.Text = "<b>TestAssetLoader</b> (walk west to see the beacons)\n" .. table.concat(richLines, "\n")
-	label.Parent = billboard
+local container = containerOrError :: Instance
+local model = container:FindFirstChildWhichIsA("Model") or container:FindFirstChildWhichIsA("BasePart")
+if not model then
+	warn(("TestAssetLoader: asset %d contained no Model/BasePart to place"):format(OWNED_ASSET_ID))
+	container:Destroy()
+	return
 end
 
--- Returns whether the asset loaded and, if not, why -- both get surfaced on
--- the in-world beacon/board, not just print/warn.
-local function loadTestAsset(testAsset: TestAsset, x: number, z: number): (boolean, string?)
-	local success, containerOrError = pcall(function()
-		return InsertService:LoadAsset(testAsset.assetId)
-	end)
+model.Name = MODEL_NAME
+model.Parent = LoadedAssets
 
-	if not success or not containerOrError then
-		local reason = tostring(containerOrError)
-		warn(("TestAssetLoader: failed to load %s (%d): %s"):format(testAsset.name, testAsset.assetId, reason))
-		return false, reason
-	end
-
-	local container = containerOrError :: Instance
-	local model = container:FindFirstChildWhichIsA("Model") or container:FindFirstChildWhichIsA("BasePart")
-	if not model then
-		warn(("TestAssetLoader: %s (%d) contained no Model/BasePart to place"):format(testAsset.name, testAsset.assetId))
-		container:Destroy()
-		return false, "insert result had no Model/BasePart"
-	end
-
-	model.Name = testAsset.name
-	model.Parent = TestAssets
-
-	-- Anchor everything so the asset doesn't fall/scatter under gravity
-	-- while we're just eyeballing it; keep default collision fidelity so a
-	-- dense mesh doesn't spike server physics cost.
-	if model:IsA("BasePart") then
-		model.Anchored = true
-	else
-		for _, descendant in ipairs(model:GetDescendants()) do
-			if descendant:IsA("BasePart") then
-				descendant.Anchored = true
-			end
+-- Anchor everything so the asset doesn't fall/scatter under gravity; keep
+-- default collision fidelity so a dense mesh doesn't spike server physics
+-- cost.
+if model:IsA("BasePart") then
+	model.Anchored = true
+else
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			descendant.Anchored = true
 		end
 	end
-
-	placeOnGround(model :: any, x, z)
-	container:Destroy()
-
-	print(("TestAssetLoader: loaded %s (%d) at (%.0f, %.0f)"):format(testAsset.name, testAsset.assetId, x, z))
-	return true, nil
 end
 
-local boardLines: { string } = {}
+placeOnGround(model :: any, LOAD_POSITION.X, LOAD_POSITION.Z)
+container:Destroy()
 
-for index, testAsset in ipairs(TEST_ASSETS) do
-	local x = TEST_ZONE_ORIGIN.X - (index - 1) * SPACING
-	local z = TEST_ZONE_ORIGIN.Z
-
-	local ok, err = loadTestAsset(testAsset, x, z)
-	local color = ok and OK_COLOR or FAIL_COLOR
-
-	local beaconText = ok
-			and ("<b>%s</b>\n<font color=\"#3CDC5A\">OK</font> (id %d)"):format(testAsset.name, testAsset.assetId)
-		or ("<b>%s</b>\n<font color=\"#E63C3C\">FAILED</font> (id %d)"):format(testAsset.name, testAsset.assetId)
-	createBeacon(testAsset.name, x, z, beaconText, color, TestAssets)
-
-	local boardLine = ok
-			and ("<font color=\"#3CDC5A\">OK</font> - %s (id %d)"):format(testAsset.name, testAsset.assetId)
-		or ("<font color=\"#E63C3C\">FAILED</font> - %s (id %d): %s"):format(testAsset.name, testAsset.assetId, tostring(err))
-	table.insert(boardLines, boardLine)
-end
-
-createStatusBoard(boardLines)
+print(("TestAssetLoader: loaded asset %d at (%.0f, %.0f)"):format(OWNED_ASSET_ID, LOAD_POSITION.X, LOAD_POSITION.Z))
